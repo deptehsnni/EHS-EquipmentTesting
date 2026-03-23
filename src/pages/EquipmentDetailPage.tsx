@@ -4,7 +4,9 @@ import { supabase } from '../lib/supabase';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../App';
 import { useToast } from '../hooks/useToast';
-import { Equipment, Inspection, mapDbToEquipment, mapEquipmentToDb, getRiksaUjiStatus, riksaUjiStatusLabel, formatDate, formatDateShort } from '../types';
+import { Equipment, Inspection, ValidityPeriod, mapDbToEquipment, mapEquipmentToDb, getRiksaUjiStatus, riksaUjiStatusLabel, formatDate, formatDateShort, calculateNextInspectionDate } from '../types';
+
+const VALIDITY_OPTIONS: ValidityPeriod[] = ['6 Bulan', '1 Tahun', '2 Tahun', '3 Tahun'];
 import { QRCodeCanvas } from 'qrcode.react';
 
 const MI = ({ icon, style = {}, className = '' }: { icon: string; style?: React.CSSProperties; className?: string }) => (
@@ -30,12 +32,23 @@ export const EquipmentDetailPage: React.FC = () => {
   const isMobile  = useIsMobile();
   const qrRef     = useRef<HTMLDivElement>(null);
 
-  const [equipment, setEquipment] = useState<Equipment | null>(null);
-  const [loading,   setLoading]   = useState(true);
-  const [updating,  setUpdating]  = useState(false);
-  const [newStatus, setNewStatus] = useState<'Good' | 'Needs Repair' | 'Critical'>('Good');
-  const [notes,     setNotes]     = useState('');
-  const [saving,    setSaving]    = useState(false);
+  const [equipment,      setEquipment]      = useState<Equipment | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [updating,       setUpdating]       = useState(false);
+  const [newStatus,      setNewStatus]      = useState<'Good' | 'Needs Repair' | 'Critical'>('Good');
+  const [newDepartment,  setNewDepartment]  = useState('');
+  const [lastInspDate,   setLastInspDate]   = useState('');
+  const [validityPeriod, setValidityPeriod] = useState<ValidityPeriod>('1 Tahun');
+  const [notes,          setNotes]          = useState('');
+  const [saving,         setSaving]         = useState(false);
+
+  const initUpdateForm = (m: Equipment) => {
+    setNewStatus(m.status);
+    setNewDepartment(m.department || '');
+    setLastInspDate(m.lastInspectionDate || '');
+    setValidityPeriod((m.validityPeriod as ValidityPeriod) || '1 Tahun');
+    setNotes('');
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -43,7 +56,9 @@ export const EquipmentDetailPage: React.FC = () => {
       .then(({ data, error }) => {
         if (error || !data) { toast.error('Peralatan tidak ditemukan'); navigate('/inventory'); return; }
         const m = mapDbToEquipment(data);
-        setEquipment(m); setNewStatus(m.status); setLoading(false);
+        setEquipment(m);
+        initUpdateForm(m);
+        setLoading(false);
       });
   }, [id]);
 
@@ -62,12 +77,54 @@ export const EquipmentDetailPage: React.FC = () => {
 
   const handleUpdate = async () => {
     if (!equipment || !user) return;
+
+    // Validate: if lastInspDate is set, validityPeriod must be set too
+    if (lastInspDate && !validityPeriod) {
+      toast.error('Pilih masa berlaku riksa uji');
+      return;
+    }
+
     setSaving(true);
-    const insp: Inspection = { id: Math.random().toString(36).slice(2), date: new Date().toISOString(), status: newStatus, notes, performedBy: user.fullName || user.employeeId, type: `Riksa Uji ${(equipment.inspections?.length || 0) + 1}` };
-    const updated: Equipment = { ...equipment, status: newStatus, updatedAt: new Date().toISOString(), updatedBy: user.fullName || user.employeeId, inspections: [insp, ...(equipment.inspections || [])] };
-    const { error } = await supabase.from('equipments').update(mapEquipmentToDb(updated, user.fullName || '')).eq('id', equipment.id);
-    if (error) { toast.error('Gagal menyimpan: ' + error.message); }
-    else { toast.success('Status berhasil diperbarui'); setEquipment(updated); setUpdating(false); setNotes(''); }
+
+    // Calculate next inspection date if lastInspDate provided
+    const nextInspDate = lastInspDate && validityPeriod
+      ? calculateNextInspectionDate(lastInspDate, validityPeriod)
+      : equipment.nextInspectionDate;
+
+    const insp: Inspection = {
+      id:          Math.random().toString(36).slice(2),
+      date:        new Date().toISOString(),
+      status:      newStatus,
+      notes,
+      performedBy: user.fullName || user.employeeId,
+      type:        `Riksa Uji ${(equipment.inspections?.length || 0) + 1}`,
+    };
+
+    const updated: Equipment = {
+      ...equipment,
+      status:             newStatus,
+      department:         newDepartment || equipment.department,
+      lastInspectionDate: lastInspDate  || equipment.lastInspectionDate,
+      validityPeriod:     validityPeriod || equipment.validityPeriod,
+      nextInspectionDate: nextInspDate,
+      updatedAt:          new Date().toISOString(),
+      updatedBy:          user.fullName || user.employeeId,
+      inspections:        [insp, ...(equipment.inspections || [])],
+    };
+
+    const { error } = await supabase
+      .from('equipments')
+      .update(mapEquipmentToDb(updated, user.fullName || ''))
+      .eq('id', equipment.id);
+
+    if (error) {
+      toast.error('Gagal menyimpan: ' + error.message);
+    } else {
+      toast.success('Data berhasil diperbarui');
+      setEquipment(updated);
+      setUpdating(false);
+      setNotes('');
+    }
     setSaving(false);
   };
 
@@ -78,20 +135,90 @@ export const EquipmentDetailPage: React.FC = () => {
   const qrValue     = `${window.location.origin}/scan/${equipment.equipmentNo}`;
   const specItems   = Object.entries(equipment.specs || {}).filter(([, v]) => v && typeof v === 'string');
 
+  const cancelUpdate = () => {
+    setUpdating(false);
+    if (equipment) initUpdateForm(equipment);
+  };
+
   const UpdateForm = ({ compact = false }: { compact?: boolean }) => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-        {(['Good', 'Needs Repair', 'Critical'] as const).map(s => (
-          <button key={s} onClick={() => setNewStatus(s)} style={{ padding: compact ? '10px 4px' : '12px 8px', borderRadius: 9, cursor: 'pointer', fontFamily: 'Manrope', fontWeight: 700, fontSize: compact ? 11 : 12, letterSpacing: '0.02em', textAlign: 'center', border: `2px solid ${newStatus === s ? condColor(s) : 'var(--surface-container)'}`, background: newStatus === s ? condBg(s) : 'var(--surface-container-lowest)', color: newStatus === s ? condColor(s) : 'var(--on-surface-variant)', transition: 'all 0.15s' }}>
-            {s === 'Good' ? 'Baik' : s === 'Needs Repair' ? 'Perlu Perbaikan' : 'Kritis'}
-          </button>
-        ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+      {/* ── Status Kondisi ── */}
+      <div>
+        <p style={{ fontFamily: 'Manrope', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--on-surface-variant)', marginBottom: 8 }}>Status Kondisi</p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+          {(['Good', 'Needs Repair', 'Critical'] as const).map(s => (
+            <button key={s} onClick={() => setNewStatus(s)} style={{ padding: compact ? '9px 4px' : '11px 8px', borderRadius: 9, cursor: 'pointer', fontFamily: 'Manrope', fontWeight: 700, fontSize: compact ? 11 : 12, letterSpacing: '0.02em', textAlign: 'center', border: `2px solid ${newStatus === s ? condColor(s) : 'var(--surface-container)'}`, background: newStatus === s ? condBg(s) : 'var(--surface-container-lowest)', color: newStatus === s ? condColor(s) : 'var(--on-surface-variant)', transition: 'all 0.15s' }}>
+              {s === 'Good' ? 'Baik' : s === 'Needs Repair' ? 'Perlu Perbaikan' : 'Kritis'}
+            </button>
+          ))}
+        </div>
       </div>
-      <textarea className="input-field" placeholder="Catatan inspeksi (opsional)..." value={notes} onChange={e => setNotes(e.target.value)} style={{ height: 70 }} />
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={() => { setUpdating(false); setNotes(''); }} className="btn btn-secondary" style={{ flex: 1 }}>Batal</button>
+
+      {/* ── Two column grid for dates ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Riksa Uji Terakhir */}
+        <div>
+          <p style={{ fontFamily: 'Manrope', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--on-surface-variant)', marginBottom: 7 }}>Riksa Uji Terakhir</p>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="date"
+              className="input-field"
+              value={lastInspDate}
+              onChange={e => setLastInspDate(e.target.value)}
+              style={{ paddingRight: 10 }}
+            />
+          </div>
+          {lastInspDate && validityPeriod && (
+            <p style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 4 }}>
+              → Berlaku hingga:{' '}
+              <span style={{ fontFamily: 'Manrope', fontWeight: 700, color: 'var(--primary)' }}>
+                {new Date(calculateNextInspectionDate(lastInspDate, validityPeriod)).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </span>
+            </p>
+          )}
+        </div>
+
+        {/* Masa Berlaku */}
+        <div>
+          <p style={{ fontFamily: 'Manrope', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--on-surface-variant)', marginBottom: 7 }}>Masa Berlaku</p>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            {VALIDITY_OPTIONS.map(v => (
+              <button key={v} onClick={() => setValidityPeriod(v)} style={{ padding: '8px 6px', borderRadius: 7, cursor: 'pointer', fontFamily: 'Manrope', fontWeight: 700, fontSize: 11, textAlign: 'center', border: `2px solid ${validityPeriod === v ? 'var(--primary)' : 'var(--surface-container)'}`, background: validityPeriod === v ? 'var(--primary-container)' : 'var(--surface-container-lowest)', color: validityPeriod === v ? 'var(--on-primary-container)' : 'var(--on-surface-variant)', transition: 'all 0.15s' }}>
+                {v}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Departemen ── */}
+      <div>
+        <p style={{ fontFamily: 'Manrope', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--on-surface-variant)', marginBottom: 7 }}>Departemen</p>
+        <div style={{ position: 'relative' }}>
+          <MI icon="corporate_fare" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--outline)', fontSize: 16, pointerEvents: 'none' }} />
+          <input
+            type="text"
+            className="input-field"
+            placeholder="Nama departemen..."
+            value={newDepartment}
+            onChange={e => setNewDepartment(e.target.value)}
+            style={{ paddingLeft: 34 }}
+          />
+        </div>
+      </div>
+
+      {/* ── Catatan ── */}
+      <div>
+        <p style={{ fontFamily: 'Manrope', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--on-surface-variant)', marginBottom: 7 }}>Catatan Inspeksi</p>
+        <textarea className="input-field" placeholder="Catatan opsional..." value={notes} onChange={e => setNotes(e.target.value)} style={{ height: 70 }} />
+      </div>
+
+      {/* ── Actions ── */}
+      <div style={{ display: 'flex', gap: 8, paddingTop: 2 }}>
+        <button onClick={cancelUpdate} className="btn btn-secondary" style={{ flex: 1 }}>Batal</button>
         <button onClick={handleUpdate} disabled={saving} className="btn btn-primary" style={{ flex: 2, gap: 6 }}>
-          <MI icon="save" className="mi-sm" /> {saving ? 'Menyimpan...' : 'Simpan'}
+          <MI icon="save" className="mi-sm" /> {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
         </button>
       </div>
     </div>
@@ -126,7 +253,7 @@ export const EquipmentDetailPage: React.FC = () => {
 
         <div style={{ padding: '12px 14px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
           {!updating ? (
-            <button onClick={() => setUpdating(true)} className="btn btn-primary btn-lg" style={{ width: '100%', gap: 8 }}>
+            <button onClick={() => { initUpdateForm(equipment); setUpdating(true); }} className="btn btn-primary btn-lg" style={{ width: '100%', gap: 8 }}>
               <MI icon="shield_check" className="mi-sm" /> Update Status Riksa Uji
             </button>
           ) : (
@@ -216,7 +343,7 @@ export const EquipmentDetailPage: React.FC = () => {
             <span className={`badge badge-${riksaStatus}`}>{riksaUjiStatusLabel[riksaStatus]}</span>
           </div>
           {!updating && (
-            <button onClick={() => setUpdating(true)} className="btn btn-primary" style={{ gap: 6 }}>
+            <button onClick={() => { initUpdateForm(equipment); setUpdating(true); }} className="btn btn-primary" style={{ gap: 6 }}>
               <MI icon="shield_check" className="mi-sm" /> Update Status
             </button>
           )}
