@@ -3,168 +3,81 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../App';
-import {
-  Equipment, mapDbToEquipment, getRiksaUjiStatus,
-  riksaUjiStatusLabel, formatDateShort,
-} from '../types';
-import {
-  Package, CheckCircle2, AlertTriangle, XCircle,
-  ChevronRight, Download, FileSpreadsheet, FileText, Clock,
-} from 'lucide-react';
+import { Equipment, mapDbToEquipment, getRiksaUjiStatus, riksaUjiStatusLabel, formatDateShort } from '../types';
+import { Download, FileSpreadsheet, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
-/* ─── Responsive hook ────────────────────────────────────────────────────── */
+const MI = ({ icon, style = {}, className = '' }: { icon: string; style?: React.CSSProperties; className?: string }) => (
+  <span className={`mi ${className}`} style={style}>{icon}</span>
+);
+
 const useIsMobile = () => {
   const [v, setV] = useState(window.innerWidth < 1024);
-  useEffect(() => {
-    const fn = () => setV(window.innerWidth < 1024);
-    window.addEventListener('resize', fn);
-    return () => window.removeEventListener('resize', fn);
-  }, []);
+  useEffect(() => { const fn = () => setV(window.innerWidth < 1024); window.addEventListener('resize', fn); return () => window.removeEventListener('resize', fn); }, []);
   return v;
 };
 
-/* ─── Mini donut SVG ─────────────────────────────────────────────────────── */
-const Donut: React.FC<{
-  data: { value: number; color: string }[];
-  total: number;
-  size: number;
-  stroke: number;
-}> = ({ data, total, size, stroke }) => {
-  const r = (size - stroke) / 2;
-  const cx = size / 2, cy = size / 2;
-  const circ = 2 * Math.PI * r;
-  let offset = 0;
-  const segs = data.map(d => {
-    const dash = total > 0 ? (d.value / total) * circ : 0;
-    const s = { ...d, dash, offset };
-    offset += dash;
-    return s;
-  });
+/* ── Donut Chart ──────────────────────────────────────────────────────────── */
+const Donut: React.FC<{ data: { value: number; color: string }[]; total: number; size: number; stroke: number; pct: number }> = ({ data, total, size, stroke, pct }) => {
+  const r = (size - stroke) / 2, cx = size / 2, cy = size / 2, circ = 2 * Math.PI * r;
+  let off = 0;
+  const segs = data.map(d => { const dash = total > 0 ? (d.value / total) * circ : 0; const s = { ...d, dash, off }; off += dash; return s; });
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: 'rotate(-90deg)' }}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--surface-3)" strokeWidth={stroke} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--surface-container)" strokeWidth={stroke} />
       {segs.map((s, i) => s.dash > 0 ? (
-        <circle key={i} cx={cx} cy={cy} r={r} fill="none"
-          stroke={s.color} strokeWidth={stroke}
-          strokeDasharray={`${s.dash} ${circ - s.dash}`}
-          strokeDashoffset={-s.offset}
-          strokeLinecap="butt"
-          style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(0.16,1,0.3,1)' }}
-        />
+        <circle key={i} cx={cx} cy={cy} r={r} fill="none" stroke={s.color} strokeWidth={stroke}
+          strokeDasharray={`${s.dash} ${circ - s.dash}`} strokeDashoffset={-s.off}
+          style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(0.16,1,0.3,1)' }} />
       ) : null)}
     </svg>
   );
 };
 
-/* ─── Export Excel ───────────────────────────────────────────────────────── */
+/* ── Exports ─────────────────────────────────────────────────────────────── */
 const doExportExcel = (equipments: Equipment[]) => {
-  const now = new Date();
-  const wb = XLSX.utils.book_new();
-  const tot = equipments.length;
+  const now = new Date(), wb = XLSX.utils.book_new(), tot = equipments.length;
   const pct = (n: number) => tot > 0 ? `${Math.round((n / tot) * 100)}%` : '0%';
-  const aktif   = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'active').length;
-  const warning = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'warning').length;
-  const expired = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'expired').length;
-  const unknown = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'unknown').length;
-
-  const ws1 = XLSX.utils.aoa_to_sheet([
-    ['LAPORAN EHS EQUIPMENT TESTING'],
-    ['Tanggal', now.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })],
-    [],
-    ['Status', 'Jumlah', '%'],
-    ['Aktif', aktif, pct(aktif)],
-    ['Segera Habis', warning, pct(warning)],
-    ['Expired', expired, pct(expired)],
-    ['Belum Diisi', unknown, pct(unknown)],
-    ['TOTAL', tot, '100%'],
-  ]);
+  const aktif = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'active').length;
+  const warn  = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'warning').length;
+  const exp   = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'expired').length;
+  const unkn  = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'unknown').length;
+  const ws1 = XLSX.utils.aoa_to_sheet([['LAPORAN EHS EQUIPMENT TESTING'], ['Tanggal', now.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })], [], ['Status', 'Jumlah', '%'], ['Aktif', aktif, pct(aktif)], ['Segera Habis', warn, pct(warn)], ['Expired', exp, pct(exp)], ['Belum Diisi', unkn, pct(unkn)], ['TOTAL', tot, '100%']]);
   ws1['!cols'] = [{ wch: 16 }, { wch: 10 }, { wch: 8 }];
   XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan');
-
-  const ws2 = XLSX.utils.json_to_sheet(equipments.map(e => ({
-    'No. Peralatan': e.equipmentNo, 'Nama': e.equipmentName, 'Kategori': e.category,
-    'Departemen': e.department, 'Riksa Uji Terakhir': e.lastInspectionDate || '-',
-    'Masa Berlaku': e.validityPeriod || '-', 'Riksa Uji Berikutnya': e.nextInspectionDate || '-',
-    'Status': riksaUjiStatusLabel[getRiksaUjiStatus(e.nextInspectionDate)],
-  })));
-  ws2['!cols'] = Array(8).fill({ wch: 20 });
+  const ws2 = XLSX.utils.json_to_sheet(equipments.map(e => ({ 'No.': e.equipmentNo, 'Nama': e.equipmentName, 'Kategori': e.category, 'Dept': e.department, 'Riksa Uji': e.nextInspectionDate || '-', 'Status': riksaUjiStatusLabel[getRiksaUjiStatus(e.nextInspectionDate)] })));
+  ws2['!cols'] = Array(6).fill({ wch: 20 });
   XLSX.utils.book_append_sheet(wb, ws2, 'Semua Peralatan');
-
   const urgent = equipments.filter(e => ['expired', 'warning'].includes(getRiksaUjiStatus(e.nextInspectionDate)));
-  if (urgent.length > 0) {
-    const ws3 = XLSX.utils.json_to_sheet(urgent.map(e => ({
-      'Prioritas': getRiksaUjiStatus(e.nextInspectionDate) === 'expired' ? 'EXPIRED' : 'SEGERA HABIS',
-      'No. Peralatan': e.equipmentNo, 'Nama': e.equipmentName,
-      'Departemen': e.department, 'Jatuh Tempo': e.nextInspectionDate || '-',
-    })));
-    ws3['!cols'] = [{ wch: 14 }, { wch: 16 }, { wch: 28 }, { wch: 18 }, { wch: 18 }];
-    XLSX.utils.book_append_sheet(wb, ws3, 'Perlu Perhatian');
-  }
+  if (urgent.length > 0) { const ws3 = XLSX.utils.json_to_sheet(urgent.map(e => ({ 'Prioritas': getRiksaUjiStatus(e.nextInspectionDate) === 'expired' ? 'EXPIRED' : 'SEGERA HABIS', 'No.': e.equipmentNo, 'Nama': e.equipmentName, 'Dept': e.department, 'Jatuh Tempo': e.nextInspectionDate || '-' }))); XLSX.utils.book_append_sheet(wb, ws3, 'Perlu Perhatian'); }
   XLSX.writeFile(wb, `Laporan_EHS_${now.toISOString().split('T')[0]}.xlsx`);
 };
 
-/* ─── Export PDF ─────────────────────────────────────────────────────────── */
 const doExportPDF = (equipments: Equipment[]) => {
-  const now = new Date();
-  const tot     = equipments.length;
-  const aktif   = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'active').length;
-  const warning = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'warning').length;
-  const expired = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'expired').length;
-  const urgent  = equipments.filter(e => ['expired', 'warning'].includes(getRiksaUjiStatus(e.nextInspectionDate)));
-
-  const html = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8">
-<style>
-  *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#111;padding:32px;font-size:12px}
-  h1{font-size:18px;font-weight:700;margin-bottom:3px}p.sub{color:#666;margin-bottom:20px;font-size:12px}
-  .row4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
-  .box{border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px}
-  .num{font-size:22px;font-weight:700}.lbl{font-size:10px;color:#6b7280;margin-top:2px}
-  h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid #e5e7eb}
-  table{width:100%;border-collapse:collapse}
-  th{padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#9ca3af;background:#f9fafb;border-bottom:1px solid #e5e7eb}
-  td{padding:8px 10px;border-bottom:1px solid #f3f4f6;font-size:11px}
-  .ok{color:#15803d;font-weight:600}.fn{font-family:monospace;font-weight:700}
-  footer{margin-top:24px;font-size:10px;color:#9ca3af;border-top:1px solid #e5e7eb;padding-top:10px;display:flex;justify-content:space-between}
-  @media print{body{padding:16px}}
-</style></head><body>
-<h1>Laporan EHS Equipment Testing</h1>
-<p class="sub">Dicetak ${now.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · ${now.toLocaleTimeString('id-ID')}</p>
-<div class="row4">
-  <div class="box"><div class="num" style="color:#2563EB">${tot}</div><div class="lbl">Total Peralatan</div></div>
-  <div class="box"><div class="num" style="color:#15803d">${aktif}</div><div class="lbl">Aktif</div></div>
-  <div class="box"><div class="num" style="color:#b45309">${warning}</div><div class="lbl">Segera Habis</div></div>
-  <div class="box"><div class="num" style="color:#b91c1c">${expired}</div><div class="lbl">Expired</div></div>
-</div>
-${urgent.length > 0 ? `<h2>Perlu Perhatian (${urgent.length})</h2>
-<table><thead><tr><th>No. Peralatan</th><th>Nama</th><th>Departemen</th><th>Jatuh Tempo</th><th>Status</th></tr></thead><tbody>
-${urgent.map(e=>{const s=getRiksaUjiStatus(e.nextInspectionDate);const c=s==='expired'?'#b91c1c':'#b45309';return`<tr><td class="fn">${e.equipmentNo}</td><td>${e.equipmentName||'-'}</td><td>${e.department||'-'}</td><td style="color:${c};font-weight:600">${e.nextInspectionDate?new Date(e.nextInspectionDate).toLocaleDateString('id-ID'):'-'}</td><td style="color:${c};font-weight:600">${riksaUjiStatusLabel[s]}</td></tr>`}).join('')}
-</tbody></table>` : `<p class="ok" style="margin:12px 0">✓ Tidak ada peralatan yang perlu perhatian segera.</p>`}
-<h2>Semua Peralatan (${equipments.length})</h2>
-<table><thead><tr><th>No. Peralatan</th><th>Nama</th><th>Kategori</th><th>Departemen</th><th>Riksa Uji Berikutnya</th><th>Status</th></tr></thead><tbody>
-${equipments.slice(0,50).map(e=>{const s=getRiksaUjiStatus(e.nextInspectionDate);const c={active:'#15803d',warning:'#b45309',expired:'#b91c1c',unknown:'#6b7280'}[s];return`<tr><td class="fn">${e.equipmentNo}</td><td>${e.equipmentName||'-'}</td><td>${e.category}</td><td>${e.department||'-'}</td><td style="color:${c};font-weight:600">${e.nextInspectionDate?new Date(e.nextInspectionDate).toLocaleDateString('id-ID'):'-'}</td><td style="color:${c}">${riksaUjiStatusLabel[s]}</td></tr>`}).join('')}
-</tbody></table>
-${equipments.length>50?`<p style="font-size:10px;color:#9ca3af;margin-top:5px">* Export Excel untuk data lengkap (${equipments.length} peralatan).</p>`:''}
-<footer><span>EHS Equipment Testing System</span><span>${now.getFullYear()}</span></footer>
-</body></html>`;
-
-  const w = window.open('', '_blank');
-  if (!w) return;
-  w.document.write(html);
-  w.document.close();
-  setTimeout(() => w.print(), 500);
+  const now = new Date(), tot = equipments.length;
+  const aktif = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'active').length;
+  const warn  = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'warning').length;
+  const exp   = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'expired').length;
+  const urgent = equipments.filter(e => ['expired', 'warning'].includes(getRiksaUjiStatus(e.nextInspectionDate)));
+  const html = `<!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Arial,sans-serif;color:#283439;padding:32px;font-size:12px}h1{font-size:18px;font-weight:800;margin-bottom:3px;color:#1A365D}p.sub{color:#546166;margin-bottom:20px}.row4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}.box{border:1px solid #e7eff3;border-radius:8px;padding:12px 14px;background:#fff}.num{font-size:22px;font-weight:800}.lbl{font-size:10px;color:#546166;margin-top:2px}h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#546166;margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid #e7eff3}table{width:100%;border-collapse:collapse}th{padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:#707d82;background:#eff4f7;border-bottom:1px solid #e7eff3}td{padding:8px 10px;border-bottom:1px solid #f7fafc;font-size:11px}.fn{font-family:monospace;font-weight:700}footer{margin-top:24px;font-size:10px;color:#a7b4ba;border-top:1px solid #e7eff3;padding-top:10px;display:flex;justify-content:space-between}@media print{body{padding:16px}}</style></head><body>
+<h1>Laporan EHS Equipment Testing</h1><p class="sub">Dicetak ${now.toLocaleDateString('id-ID',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · ${now.toLocaleTimeString('id-ID')}</p>
+<div class="row4"><div class="box"><div class="num" style="color:#455f88">${tot}</div><div class="lbl">Total Peralatan</div></div><div class="box"><div class="num" style="color:#16a34a">${aktif}</div><div class="lbl">Aktif</div></div><div class="box"><div class="num" style="color:#5d5d78">${warn}</div><div class="lbl">Segera Habis</div></div><div class="box"><div class="num" style="color:#9f403d">${exp}</div><div class="lbl">Expired</div></div></div>
+${urgent.length > 0 ? `<h2>Perlu Perhatian (${urgent.length})</h2><table><thead><tr><th>No.</th><th>Nama</th><th>Dept</th><th>Jatuh Tempo</th><th>Status</th></tr></thead><tbody>${urgent.map(e=>{const s=getRiksaUjiStatus(e.nextInspectionDate);return`<tr><td class="fn">${e.equipmentNo}</td><td>${e.equipmentName||'-'}</td><td>${e.department||'-'}</td><td style="color:${s==='expired'?'#9f403d':'#5d5d78'};font-weight:600">${e.nextInspectionDate?new Date(e.nextInspectionDate).toLocaleDateString('id-ID'):'-'}</td><td style="color:${s==='expired'?'#9f403d':'#5d5d78'};font-weight:700">${riksaUjiStatusLabel[s]}</td></tr>`}).join('')}</tbody></table>` : `<p style="color:#16a34a;font-weight:600;margin:12px 0">✓ Tidak ada peralatan yang perlu perhatian segera.</p>`}
+<footer><span>EHS Equipment Testing System</span><span>${now.getFullYear()}</span></footer></body></html>`;
+  const w = window.open('', '_blank'); if (!w) return; w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500);
 };
 
-/* ─── Main ───────────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+═══════════════════════════════════════════════════════════════════════════ */
 export const DashboardPage: React.FC = () => {
-  const { user } = useAuth();
-  const navigate  = useNavigate();
-  const isMobile  = useIsMobile();
-  const exportRef = useRef<HTMLDivElement>(null);
-
-  const [equipments,  setEquipments]  = useState<Equipment[]>([]);
-  const [loading,     setLoading]     = useState(true);
-  const [exportOpen,  setExportOpen]  = useState(false);
+  const { user }    = useAuth();
+  const navigate    = useNavigate();
+  const isMobile    = useIsMobile();
+  const exportRef   = useRef<HTMLDivElement>(null);
+  const [equipments, setEquipments] = useState<Equipment[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [exportOpen, setExportOpen] = useState(false);
 
   useEffect(() => {
     supabase.from('equipments').select('*').order('updated_at', { ascending: false })
@@ -172,14 +85,11 @@ export const DashboardPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const fn = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false);
-    };
+    const fn = (e: MouseEvent) => { if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false); };
     document.addEventListener('mousedown', fn);
     return () => document.removeEventListener('mousedown', fn);
   }, []);
 
-  /* stats */
   const total  = equipments.length;
   const aktif  = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'active').length;
   const warn   = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'warning').length;
@@ -187,127 +97,74 @@ export const DashboardPage: React.FC = () => {
   const unkn   = equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'unknown').length;
 
   const urgent = useMemo(() =>
-    equipments
-      .filter(e => ['warning', 'expired'].includes(getRiksaUjiStatus(e.nextInspectionDate)))
-      .sort((a, b) => {
-        const da = a.nextInspectionDate ? new Date(a.nextInspectionDate).getTime() : Infinity;
-        const db = b.nextInspectionDate ? new Date(b.nextInspectionDate).getTime() : Infinity;
-        return da - db;
-      }),
+    equipments.filter(e => ['warning', 'expired'].includes(getRiksaUjiStatus(e.nextInspectionDate)))
+      .sort((a, b) => (a.nextInspectionDate || '').localeCompare(b.nextInspectionDate || '')),
     [equipments]);
 
-  const recent = equipments.slice(0, 6);
+  const recent = equipments.slice(0, 5);
 
   const catData = useMemo(() =>
     Array.from(new Set(equipments.map(e => e.category))).map(cat => {
       const items = equipments.filter(e => e.category === cat);
-      return {
-        cat,
-        total: items.length,
-        aktif:   items.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'active').length,
-        warning: items.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'warning').length,
-        expired: items.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === 'expired').length,
-      };
-    }),
-    [equipments]);
+      return { cat, total: items.length, pct: total > 0 ? Math.round((items.length / total) * 100) : 0 };
+    }).sort((a, b) => b.total - a.total),
+    [equipments, total]);
 
-  const donut = [
-    { value: aktif, color: '#16A34A' },
-    { value: warn,  color: '#D97706' },
-    { value: exp,   color: '#DC2626' },
-    { value: unkn,  color: '#D1D5DB' },
+  const validPct = total > 0 ? Math.round((aktif / total) * 100) : 0;
+  const today    = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  const statCards = [
+    { label: 'Total Unit',         sub: 'Peralatan Terdaftar', value: total,  icon: 'construction', iconColor: '#455f88', iconBg: '#d6e3ff', valueCls: '#1A365D' },
+    { label: 'Status Aktif',       sub: 'Sertifikasi Valid',   value: aktif,  icon: 'verified',     iconColor: '#546073', iconBg: '#d8e3fa', valueCls: '#455f88' },
+    { label: 'Mendekati Expired',  sub: 'H-90 Masa Berlaku',   value: warn,   icon: 'warning',      iconColor: '#5d5d78', iconBg: '#d9d7f8', valueCls: '#5d5d78' },
+    { label: 'Kritis',             sub: 'Segera Uji Ulang',    value: exp,    icon: 'error',        iconColor: '#752121', iconBg: '#fe8983', valueCls: '#9f403d', ring: true },
   ];
 
-  const today = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const firstName = user?.fullName?.split(' ')[0] || 'Pengguna';
-
-  /* ─── LOADING ─────────────────────────────────────────────────────────── */
-  if (loading) return (
-    <Layout>
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <div className="spinner" />
-      </div>
-    </Layout>
-  );
-
-  /* ════════════════════════════════════════════════════════════════════════
-     MOBILE
-  ════════════════════════════════════════════════════════════════════════ */
+  /* ════════ MOBILE ════════ */
   if (isMobile) return (
     <Layout>
-      <div style={{ background: '#F0F0EE', minHeight: '100vh' }}>
-
+      <div style={{ background: 'var(--surface-container-low)', minHeight: '100vh' }}>
         {/* Hero */}
         <div className="m-hero">
           <div style={{ position: 'relative', zIndex: 1 }}>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, marginBottom: 6 }}>{today}</p>
-            <h1 style={{ color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 2 }}>
-              Hai, {firstName} 👋
-            </h1>
-            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>Ringkasan EHS hari ini</p>
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 11, fontFamily: 'Manrope', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>{today}</p>
+            <h1 style={{ color: '#fff', fontFamily: 'Manrope', fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', marginBottom: 2 }}>Halo, {user?.fullName?.split(' ')[0]} 👋</h1>
+            <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 13 }}>Ringkasan sistem EHS hari ini</p>
           </div>
-
-          {/* 4 mini stats */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 18, position: 'relative', zIndex: 1 }}>
-            {[
-              { label: 'Total Alat', value: total, color: 'rgba(255,255,255,0.9)' },
-              { label: 'Aktif', value: aktif, color: '#86EFAC' },
-              { label: 'Segera Habis', value: warn, color: '#FDE68A' },
-              { label: 'Expired', value: exp, color: '#FCA5A5' },
-            ].map(s => (
-              <div key={s.label} style={{ background: 'rgba(255,255,255,0.09)', borderRadius: 12, padding: '13px 14px' }}>
-                <p style={{ color: s.color, fontSize: 26, fontWeight: 700, lineHeight: 1, marginBottom: 4 }}>{s.value}</p>
-                <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11 }}>{s.label}</p>
+            {[{ l: 'Total', v: total, c: 'rgba(255,255,255,0.9)' }, { l: 'Aktif', v: aktif, c: '#86EFAC' }, { l: 'Segera Habis', v: warn, c: '#C4B5FD' }, { l: 'Expired', v: exp, c: '#FCA5A5' }].map(s => (
+              <div key={s.l} style={{ background: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: '12px 14px' }}>
+                <p style={{ color: s.c, fontSize: 26, fontFamily: 'Manrope', fontWeight: 800, lineHeight: 1 }}>{loading ? '—' : s.v}</p>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 4 }}>{s.l}</p>
               </div>
             ))}
           </div>
         </div>
 
-        <div style={{ padding: '14px 14px 20px' }}>
-
+        <div style={{ padding: '14px 14px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {/* Alerts */}
-          {exp > 0 && (
-            <div className="notif notif-danger" style={{ marginBottom: 8, fontSize: 13 }}>
-              <XCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span style={{ flex: 1 }}><strong>{exp} peralatan</strong> riksa uji EXPIRED</span>
-              <button onClick={() => navigate('/inventory?filter=expired')} style={{ background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontWeight: 600, fontSize: 12, padding: 0, flexShrink: 0 }}>Lihat</button>
-            </div>
-          )}
-          {warn > 0 && (
-            <div className="notif notif-warning" style={{ marginBottom: 12, fontSize: 13 }}>
-              <AlertTriangle size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span style={{ flex: 1 }}><strong>{warn} peralatan</strong> jatuh tempo dalam 3 bulan</span>
-              <button onClick={() => navigate('/inventory?filter=warning')} style={{ background: 'none', border: 'none', color: 'var(--amber)', cursor: 'pointer', fontWeight: 600, fontSize: 12, padding: 0, flexShrink: 0 }}>Lihat</button>
-            </div>
-          )}
+          {exp > 0 && <div className="notif notif-danger" style={{ fontSize: 13 }}><MI icon="error" className="mi-sm" style={{ flexShrink: 0 }} /><span style={{ flex: 1 }}><strong>{exp} peralatan</strong> riksa uji sudah kritis / expired</span><button onClick={() => navigate('/inventory?filter=expired')} style={{ background: 'none', border: 'none', color: 'var(--error)', fontWeight: 700, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>Lihat</button></div>}
+          {warn > 0 && <div className="notif notif-warning" style={{ fontSize: 13 }}><MI icon="warning" className="mi-sm" style={{ flexShrink: 0 }} /><span style={{ flex: 1 }}><strong>{warn} peralatan</strong> mendekati jatuh tempo</span><button onClick={() => navigate('/inventory?filter=warning')} style={{ background: 'none', border: 'none', color: 'var(--tertiary)', fontWeight: 700, fontSize: 12, cursor: 'pointer', flexShrink: 0 }}>Lihat</button></div>}
 
           {/* Donut + legend */}
-          <div className="m-card" style={{ padding: 16, marginBottom: 10 }}>
-            <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', marginBottom: 14 }}>Status Riksa Uji</p>
+          <div className="m-card" style={{ padding: 18 }}>
+            <p style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 14, color: '#1A365D', marginBottom: 14 }}>Distribusi Status Riksa Uji</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ position: 'relative', flexShrink: 0 }}>
-                <Donut data={donut} total={total} size={96} stroke={12} />
+                <Donut data={[{ value: aktif, color: '#455f88' }, { value: warn, color: '#5d5d78' }, { value: exp, color: '#9f403d' }, { value: unkn, color: '#a7b4ba' }]} total={total} size={96} stroke={12} pct={validPct} />
                 <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{total}</span>
-                  <span style={{ fontSize: 9, color: 'var(--ink-3)', marginTop: 2, letterSpacing: '0.05em' }}>TOTAL</span>
+                  <span style={{ fontFamily: 'Manrope', fontSize: 18, fontWeight: 800, color: '#1A365D', lineHeight: 1 }}>{validPct}%</span>
+                  <span style={{ fontSize: 8, color: 'var(--on-surface-variant)', marginTop: 2, fontFamily: 'Manrope', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>VALIDITAS</span>
                 </div>
               </div>
               <div style={{ flex: 1 }}>
-                {[
-                  { label: 'Aktif', value: aktif, color: '#16A34A' },
-                  { label: 'Segera Habis', value: warn, color: '#D97706' },
-                  { label: 'Expired', value: exp, color: '#DC2626' },
-                  { label: 'Belum Diisi', value: unkn, color: '#9CA3AF' },
-                ].map(s => (
-                  <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, color: 'var(--ink-2)' }}>{s.label}</span>
+                {[{ l: 'Sertifikat Aktif', v: aktif, c: '#455f88' }, { l: 'Segera Habis', v: warn, c: '#5d5d78' }, { l: 'Expired', v: exp, c: '#9f403d' }, { l: 'Belum Diisi', v: unkn, c: '#a7b4ba' }].map(s => (
+                  <div key={s.l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.c, flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{s.l}</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.value}</span>
-                      <span style={{ fontSize: 11, color: 'var(--ink-4)', width: 28, textAlign: 'right' }}>{total > 0 ? Math.round((s.value / total) * 100) : 0}%</span>
-                    </div>
+                    <span style={{ fontFamily: 'Manrope', fontSize: 13, fontWeight: 700, color: '#283439' }}>{s.v}</span>
                   </div>
                 ))}
               </div>
@@ -316,43 +173,39 @@ export const DashboardPage: React.FC = () => {
 
           {/* Per Kategori */}
           {catData.length > 0 && (
-            <div className="m-card" style={{ padding: 16, marginBottom: 10 }}>
-              <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', marginBottom: 14 }}>Per Kategori</p>
+            <div className="m-card" style={{ padding: 18 }}>
+              <p style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 14, color: '#1A365D', marginBottom: 14 }}>Peralatan Per Kategori</p>
               {catData.map((c, i) => (
-                <div key={i} style={{ marginBottom: 12 }}>
+                <div key={i} style={{ marginBottom: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontSize: 12, color: 'var(--ink-2)', fontWeight: 500 }}>{c.cat}</span>
-                    <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{c.total} alat</span>
+                    <span style={{ fontSize: 11, fontFamily: 'Manrope', fontWeight: 700, color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.cat}</span>
+                    <span style={{ fontSize: 11, fontFamily: 'Manrope', fontWeight: 700, color: 'var(--on-surface-variant)' }}>{c.total} Unit</span>
                   </div>
-                  <div style={{ display: 'flex', height: 8, borderRadius: 99, overflow: 'hidden', background: 'var(--surface-3)' }}>
-                    {c.aktif   > 0 && <div style={{ flex: c.aktif,   background: '#16A34A' }} />}
-                    {c.warning > 0 && <div style={{ flex: c.warning, background: '#D97706' }} />}
-                    {c.expired > 0 && <div style={{ flex: c.expired, background: '#DC2626' }} />}
-                    {(c.total - c.aktif - c.warning - c.expired) > 0 && <div style={{ flex: (c.total - c.aktif - c.warning - c.expired), background: '#E5E7EB' }} />}
-                  </div>
+                  <div className="progress-track"><div className="progress-fill" style={{ width: `${c.pct}%` }} /></div>
                 </div>
               ))}
             </div>
           )}
 
-          {/* Perlu Perhatian */}
+          {/* Urgent */}
           {urgent.length > 0 && (
-            <div className="m-card" style={{ marginBottom: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '13px 14px', borderBottom: '1px solid var(--border)' }}>
-                <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>Perlu Perhatian</p>
-                <button onClick={() => navigate('/inventory')} style={{ background: 'none', border: 'none', fontSize: 12, color: 'var(--accent)', fontWeight: 600, cursor: 'pointer' }}>Lihat Semua</button>
+            <div className="m-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid var(--surface-container-low)' }}>
+                <p style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 14, color: '#1A365D' }}>Perlu Perhatian</p>
+                <span className="badge badge-expired">Kritis</span>
               </div>
               {urgent.slice(0, 5).map((e, i, arr) => {
                 const s = getRiksaUjiStatus(e.nextInspectionDate);
                 return (
-                  <div key={e.id} onClick={() => navigate(`/inventory/${e.id}`)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
-                    <div style={{ width: 3, height: 36, borderRadius: 99, background: s === 'expired' ? 'var(--red)' : 'var(--amber)', flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--font-mono)' }}>{e.equipmentNo}</p>
-                      <p className="truncate" style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{e.equipmentName} · {formatDateShort(e.nextInspectionDate)}</p>
+                  <div key={e.id} onClick={() => navigate(`/inventory/${e.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px', borderBottom: i < arr.length - 1 ? '1px solid var(--surface-container-low)' : 'none', cursor: 'pointer' }}>
+                    <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <MI icon={s === 'expired' ? 'error' : 'warning'} style={{ color: s === 'expired' ? 'var(--error)' : 'var(--tertiary)', fontSize: 20 }} />
                     </div>
-                    <span className={`badge badge-${s}`}>{riksaUjiStatusLabel[s]}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 13, color: 'var(--on-surface)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.equipmentNo} — {e.equipmentName}</p>
+                      <p style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 2 }}>{s === 'expired' ? 'Riksa uji sudah expired' : `Jatuh tempo: ${formatDateShort(e.nextInspectionDate)}`}</p>
+                    </div>
+                    <MI icon="chevron_right" style={{ color: 'var(--outline-variant)', flexShrink: 0 }} />
                   </div>
                 );
               })}
@@ -360,269 +213,218 @@ export const DashboardPage: React.FC = () => {
           )}
 
           {/* Aktivitas */}
-          <div className="m-card" style={{ marginBottom: 10 }}>
-            <div style={{ padding: '13px 14px', borderBottom: '1px solid var(--border)' }}>
-              <p style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>Aktivitas Terbaru</p>
+          <div className="m-card">
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--surface-container-low)' }}>
+              <p style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 14, color: '#1A365D' }}>Aktivitas Terbaru</p>
             </div>
             {recent.map((e, i, arr) => (
-              <div key={e.id} onClick={() => navigate(`/inventory/${e.id}`)}
-                style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 14px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
-                <div style={{ width: 32, height: 32, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Package size={13} color="var(--ink-3)" />
+              <div key={e.id} onClick={() => navigate(`/inventory/${e.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < arr.length - 1 ? '1px solid var(--surface-container-low)' : 'none', cursor: 'pointer' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--surface-container-low)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <MI icon="inventory_2" style={{ color: 'var(--outline)', fontSize: 16 }} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--font-mono)' }}>{e.equipmentNo}</p>
-                  <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{formatDateShort(e.updatedAt)}</p>
+                  <p style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 13, color: 'var(--on-surface)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.equipmentNo}</p>
+                  <p style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 1 }}>{formatDateShort(e.updatedAt)}</p>
                 </div>
-                <ChevronRight size={14} color="var(--ink-4)" style={{ flexShrink: 0 }} />
+                <MI icon="chevron_right" style={{ color: 'var(--outline-variant)', flexShrink: 0 }} />
               </div>
             ))}
           </div>
 
-          {/* Export buttons */}
+          {/* Export */}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => doExportExcel(equipments)} className="btn btn-success" style={{ flex: 1, height: 42, borderRadius: 11, gap: 6 }}>
-              <FileSpreadsheet size={15} /> Export Excel
-            </button>
-            <button onClick={() => doExportPDF(equipments)} className="btn btn-secondary" style={{ flex: 1, height: 42, borderRadius: 11, gap: 6 }}>
-              <FileText size={15} /> Cetak PDF
-            </button>
+            <button onClick={() => doExportExcel(equipments)} className="btn btn-secondary" style={{ flex: 1, height: 44 }}><FileSpreadsheet size={14} /> Excel</button>
+            <button onClick={() => doExportPDF(equipments)} className="btn btn-ghost" style={{ flex: 1, height: 44 }}><FileText size={14} /> PDF</button>
           </div>
         </div>
       </div>
     </Layout>
   );
 
-  /* ════════════════════════════════════════════════════════════════════════
-     PC
-  ════════════════════════════════════════════════════════════════════════ */
+  /* ════════ PC ════════ */
   return (
     <Layout>
-      <div style={{ padding: '28px 32px 40px', maxWidth: 1300, margin: '0 auto' }}>
+      <div style={{ padding: '40px 48px', maxWidth: 1600, margin: '0 auto' }}>
 
-        {/* ── Header ────────────────────────────────────────────────────── */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24, gap: 16 }}>
-          <div>
-            <p style={{ color: 'var(--ink-3)', fontSize: 12, marginBottom: 5 }}>{today}</p>
-            <h1 className="text-display">Hai, {firstName} 👋</h1>
-          </div>
-          {/* export — fixed on the right, no overlap */}
-          <div style={{ position: 'relative', flexShrink: 0 }} ref={exportRef}>
-            <button onClick={() => setExportOpen(o => !o)} className="btn btn-secondary" style={{ gap: 6 }}>
-              <Download size={14} /> Export
-              <span style={{ fontSize: 9, opacity: 0.6, marginLeft: 2 }}>▾</span>
-            </button>
-            {exportOpen && (
-              <div className="export-menu">
-                <button className="export-menu-item" onClick={() => { doExportExcel(equipments); setExportOpen(false); }}>
-                  <FileSpreadsheet size={14} color="#16A34A" /> Export Excel (.xlsx)
-                </button>
-                <button className="export-menu-item" onClick={() => { doExportPDF(equipments); setExportOpen(false); }}>
-                  <FileText size={14} color="#DC2626" /> Cetak / Simpan PDF
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Alerts ────────────────────────────────────────────────────── */}
+        {/* Alerts */}
         {(exp > 0 || warn > 0) && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
-            {exp > 0 && (
-              <div className="notif notif-danger" style={{ fontSize: 13 }}>
-                <XCircle size={15} style={{ flexShrink: 0 }} />
-                <span style={{ flex: 1 }}><strong>{exp} peralatan</strong> riksa uji sudah EXPIRED — segera tindak lanjuti</span>
-                <button onClick={() => navigate('/inventory?filter=expired')} style={{ background: 'none', border: 'none', color: 'var(--red-text)', cursor: 'pointer', fontWeight: 600, fontSize: 12, flexShrink: 0 }}>Lihat →</button>
-              </div>
-            )}
-            {warn > 0 && (
-              <div className="notif notif-warning" style={{ fontSize: 13 }}>
-                <AlertTriangle size={15} style={{ flexShrink: 0 }} />
-                <span style={{ flex: 1 }}><strong>{warn} peralatan</strong> riksa uji akan jatuh tempo dalam 3 bulan</span>
-                <button onClick={() => navigate('/inventory?filter=warning')} style={{ background: 'none', border: 'none', color: 'var(--amber-text)', cursor: 'pointer', fontWeight: 600, fontSize: 12, flexShrink: 0 }}>Lihat →</button>
-              </div>
-            )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 28 }}>
+            {exp > 0 && <div className="notif notif-danger" style={{ fontSize: 13 }}><MI icon="error" className="mi-sm" style={{ flexShrink: 0 }} /><span style={{ flex: 1 }}><strong>{exp} peralatan</strong> riksa uji sudah EXPIRED — segera tindak lanjuti</span><button onClick={() => navigate('/inventory?filter=expired')} style={{ background: 'none', border: 'none', color: 'var(--error)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'Manrope', flexShrink: 0 }}>LIHAT DETAIL →</button></div>}
+            {warn > 0 && <div className="notif notif-warning" style={{ fontSize: 13 }}><MI icon="warning" className="mi-sm" style={{ flexShrink: 0 }} /><span style={{ flex: 1 }}><strong>{warn} peralatan</strong> mendekati jatuh tempo masa berlaku</span><button onClick={() => navigate('/inventory?filter=warning')} style={{ background: 'none', border: 'none', color: 'var(--tertiary)', fontWeight: 700, fontSize: 12, cursor: 'pointer', fontFamily: 'Manrope', flexShrink: 0 }}>LIHAT DETAIL →</button></div>}
           </div>
         )}
 
-        {/* ── Stat Cards ─────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 22 }}>
-          {[
-            { label: 'Total Peralatan', value: total, icon: Package,      color: 'var(--accent)', bg: 'var(--accent-light)', pct: null },
-            { label: 'Riksa Uji Aktif',  value: aktif, icon: CheckCircle2, color: 'var(--green)', bg: 'var(--green-light)',  pct: total > 0 ? Math.round((aktif/total)*100) : 0 },
-            { label: 'Segera Habis',     value: warn,  icon: Clock,        color: 'var(--amber)', bg: 'var(--amber-light)',  pct: total > 0 ? Math.round((warn/total)*100)  : 0 },
-            { label: 'Expired',          value: exp,   icon: XCircle,      color: 'var(--red)',   bg: 'var(--red-light)',    pct: total > 0 ? Math.round((exp/total)*100)   : 0 },
-          ].map(s => (
-            <div key={s.label} className="stat-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                <div style={{ width: 36, height: 36, background: s.bg, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <s.icon size={17} color={s.color} />
+        {/* ── Stat Cards ───────────────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 20, marginBottom: 32 }}>
+          {statCards.map((s, i) => (
+            <div key={i} className="stat-card" style={s.ring ? { boxShadow: '0 0 0 1px rgba(159,64,61,0.1), 0 2px 8px rgba(40,52,57,0.05)', background: 'linear-gradient(135deg,#fff 60%,rgba(254,137,131,0.05))' } : {}}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div className="icon-pill" style={{ background: s.iconBg }}>
+                  <MI icon={s.icon} style={{ color: s.iconColor }} className={s.ring ? 'mi-fill' : ''} />
                 </div>
-                {s.pct !== null && (
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--ink-3)', background: 'var(--surface-2)', padding: '2px 7px', borderRadius: 99 }}>{s.pct}%</span>
-                )}
+                <span className="label-caps">{s.label}</span>
               </div>
-              <p style={{ fontSize: 34, fontWeight: 700, color: 'var(--ink)', letterSpacing: '-0.03em', lineHeight: 1 }}>{s.value}</p>
-              <p style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 5, fontWeight: 500 }}>{s.label}</p>
+              <div>
+                <h3 style={{ fontFamily: 'Manrope', fontSize: 38, fontWeight: 800, color: s.valueCls, letterSpacing: '-0.03em', lineHeight: 1 }}>{loading ? '—' : s.value.toLocaleString()}</h3>
+                <p style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 4 }}>{s.sub}</p>
+              </div>
             </div>
           ))}
         </div>
 
-        {/* ── Main Grid ─────────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+        {/* ── Bento Grid ───────────────────────────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12,1fr)', gap: 20 }}>
 
-          {/* Status Distribution */}
-          <div className="card" style={{ padding: 22 }}>
-            <div className="section-header" style={{ marginBottom: 20 }}>
-              <h2 className="text-heading">Distribusi Status Riksa Uji</h2>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-              {/* donut */}
-              <div style={{ position: 'relative', flexShrink: 0 }}>
-                <Donut data={donut} total={total} size={120} stroke={14} />
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                  <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--ink)', lineHeight: 1 }}>{total}</span>
-                  <span style={{ fontSize: 9, color: 'var(--ink-3)', marginTop: 2, letterSpacing: '0.06em', fontWeight: 600 }}>TOTAL</span>
-                </div>
-              </div>
-              {/* legend */}
-              <div style={{ flex: 1 }}>
-                {[
-                  { label: 'Aktif',        value: aktif, color: '#16A34A' },
-                  { label: 'Segera Habis', value: warn,  color: '#D97706' },
-                  { label: 'Expired',      value: exp,   color: '#DC2626' },
-                  { label: 'Belum Diisi',  value: unkn,  color: '#9CA3AF' },
-                ].map(s => (
-                  <div key={s.label} style={{ marginBottom: 10 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: 'var(--ink-2)' }}>{s.label}</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: s.color }}>{s.value}</span>
-                        <span style={{ fontSize: 11, color: 'var(--ink-4)', width: 30, textAlign: 'right' }}>
-                          {total > 0 ? Math.round((s.value / total) * 100) : 0}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="progress-track">
-                      <div className="progress-fill" style={{ width: `${total > 0 ? (s.value / total) * 100 : 0}%`, background: s.color }} />
-                    </div>
-                  </div>
-                ))}
+          {/* Donut Chart — 4 cols */}
+          <div className="card-low" style={{ gridColumn: 'span 4', padding: 28 }}>
+            <h4 className="h-section" style={{ marginBottom: 24 }}>Distribusi Status Riksa Uji</h4>
+            {/* Donut */}
+            <div style={{ position: 'relative', width: 168, height: 168, margin: '0 auto 24px' }}>
+              <Donut data={[{ value: aktif, color: '#455f88' }, { value: warn, color: '#5d5d78' }, { value: exp, color: '#9f403d' }, { value: unkn, color: '#a7b4ba' }]} total={total} size={168} stroke={20} pct={validPct} />
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontFamily: 'Manrope', fontSize: 28, fontWeight: 800, color: '#1A365D', lineHeight: 1 }}>{validPct}%</span>
+                <span className="label-caps" style={{ marginTop: 4 }}>Validitas</span>
               </div>
             </div>
-          </div>
-
-          {/* Per Kategori */}
-          <div className="card" style={{ padding: 22 }}>
-            <div className="section-header" style={{ marginBottom: 20 }}>
-              <h2 className="text-heading">Per Kategori</h2>
-            </div>
-            {catData.length === 0 ? (
-              <p style={{ color: 'var(--ink-3)', fontSize: 13 }}>Belum ada data kategori.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {catData.map((c, i) => (
-                  <div key={i}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--ink-2)' }}>{c.cat}</span>
-                      <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>{c.total}</span>
-                    </div>
-                    <div style={{ display: 'flex', height: 20, borderRadius: 6, overflow: 'hidden', background: 'var(--surface-2)', gap: 1 }}>
-                      {c.aktif   > 0 && <div style={{ flex: c.aktif,   background: '#16A34A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 700 }}>{c.aktif}</div>}
-                      {c.warning > 0 && <div style={{ flex: c.warning, background: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 700 }}>{c.warning}</div>}
-                      {c.expired > 0 && <div style={{ flex: c.expired, background: '#DC2626', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', fontWeight: 700 }}>{c.expired}</div>}
-                      {(c.total - c.aktif - c.warning - c.expired) > 0 && <div style={{ flex: c.total - c.aktif - c.warning - c.expired, background: '#E5E7EB' }} />}
-                    </div>
+            {/* Legend */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[{ l: 'Sertifikat Aktif', v: aktif, c: '#455f88' }, { l: 'Proses Perpanjangan', v: warn, c: '#5d5d78' }, { l: 'Expired', v: exp, c: '#9f403d' }].map(s => (
+                <div key={s.l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: s.c }} />
+                    <span style={{ fontSize: 13, color: 'var(--on-surface-variant)' }}>{s.l}</span>
                   </div>
-                ))}
-                {/* Legend */}
-                <div style={{ display: 'flex', gap: 14, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-                  {[{ l: 'Aktif', c: '#16A34A' }, { l: 'Segera Habis', c: '#D97706' }, { l: 'Expired', c: '#DC2626' }].map(x => (
-                    <div key={x.l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: x.c }} />
-                      <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{x.l}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── Bottom Grid ───────────────────────────────────────────────── */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16 }}>
-
-          {/* Perlu Perhatian */}
-          <div className="card" style={{ overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-              <div className="section-header"><h2 className="text-heading">Perlu Perhatian</h2></div>
-              <button onClick={() => navigate('/inventory')} className="btn btn-ghost btn-sm" style={{ gap: 4 }}>
-                Lihat Semua <ChevronRight size={12} />
-              </button>
-            </div>
-            {urgent.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px', color: 'var(--ink-3)' }}>
-                <CheckCircle2 size={28} color="var(--green)" style={{ marginBottom: 10 }} />
-                <p style={{ fontSize: 13 }}>Semua riksa uji dalam kondisi baik</p>
-              </div>
-            ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>No. Peralatan</th>
-                    <th>Nama</th>
-                    <th>Departemen</th>
-                    <th>Jatuh Tempo</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {urgent.map(e => {
-                    const s = getRiksaUjiStatus(e.nextInspectionDate);
-                    return (
-                      <tr key={e.id} onClick={() => navigate(`/inventory/${e.id}`)}>
-                        <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: 13, color: 'var(--ink)' }}>{e.equipmentNo}</td>
-                        <td style={{ color: 'var(--ink)' }}>{e.equipmentName || '-'}</td>
-                        <td>{e.department || '-'}</td>
-                        <td style={{ fontWeight: 600, color: s === 'expired' ? 'var(--red)' : 'var(--amber)' }}>{formatDateShort(e.nextInspectionDate)}</td>
-                        <td><span className={`badge badge-${s}`}>{riksaUjiStatusLabel[s]}</span></td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* Aktivitas Terbaru */}
-          <div className="card" style={{ overflow: 'hidden' }}>
-            <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)' }}>
-              <div className="section-header"><h2 className="text-heading">Aktivitas Terbaru</h2></div>
-            </div>
-            <div>
-              {recent.map((e, i, arr) => (
-                <div key={e.id} onClick={() => navigate(`/inventory/${e.id}`)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 18px', borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none', cursor: 'pointer', transition: 'background var(--t)' }}
-                  onMouseEnter={el => (el.currentTarget.style.background = 'var(--surface-2)')}
-                  onMouseLeave={el => (el.currentTarget.style.background = 'transparent')}>
-                  <div style={{ width: 30, height: 30, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Package size={13} color="var(--ink-3)" />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <p className="truncate" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', fontFamily: 'var(--font-mono)' }}>{e.equipmentNo}</p>
-                    <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>{formatDateShort(e.updatedAt)}</p>
-                  </div>
-                  <ChevronRight size={12} color="var(--ink-4)" style={{ flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'Manrope', fontSize: 13, fontWeight: 700, color: 'var(--on-surface)' }}>{s.v}</span>
                 </div>
               ))}
             </div>
           </div>
 
+          {/* Per Kategori — 8 cols */}
+          <div className="card" style={{ gridColumn: 'span 8', padding: 28 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
+              <h4 className="h-section">Peralatan Per Kategori</h4>
+              <button onClick={() => navigate('/inventory')} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontFamily: 'Manrope', fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                LIHAT DETAIL <MI icon="chevron_right" className="mi-sm" />
+              </button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              {catData.map((c, i) => (
+                <div key={i}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 7 }}>
+                    <span className="label-caps">{c.cat}</span>
+                    <span className="label-caps">{c.total} Unit</span>
+                  </div>
+                  <div className="progress-track" style={{ height: 8 }}>
+                    <div className="progress-fill" style={{ width: `${c.pct}%` }} />
+                  </div>
+                </div>
+              ))}
+              {catData.length === 0 && <p style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>Belum ada data kategori.</p>}
+            </div>
+          </div>
+
+          {/* Perlu Perhatian — 7 cols */}
+          <div style={{ gridColumn: 'span 7', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 className="h-section">Perlu Perhatian</h4>
+              {urgent.length > 0 && <span className="badge badge-expired" style={{ fontSize: 9, letterSpacing: '0.08em' }}>KRITIS</span>}
+            </div>
+
+            {loading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><div className="spinner" /></div>
+            ) : urgent.length === 0 ? (
+              <div className="card" style={{ padding: 28, textAlign: 'center' }}>
+                <MI icon="verified" style={{ color: '#16a34a', fontSize: 32, marginBottom: 10 }} />
+                <p style={{ fontFamily: 'Manrope', fontWeight: 600, color: '#14532d', fontSize: 13 }}>Semua riksa uji dalam kondisi baik</p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {urgent.map(e => {
+                  const s = getRiksaUjiStatus(e.nextInspectionDate);
+                  return (
+                    <div key={e.id} onClick={() => navigate(`/inventory/${e.id}`)}
+                      className="card"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={ev => { ev.currentTarget.style.background = 'var(--surface-container-high)'; (ev.currentTarget.querySelector('.urgent-btn') as HTMLElement)!.style.opacity = '1'; }}
+                      onMouseLeave={ev => { ev.currentTarget.style.background = 'var(--surface-container-lowest)'; (ev.currentTarget.querySelector('.urgent-btn') as HTMLElement)!.style.opacity = '0'; }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ width: 46, height: 46, borderRadius: 10, background: 'var(--surface-container)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                          <MI icon={s === 'expired' ? 'error' : 'schedule'} style={{ color: s === 'expired' ? 'var(--error)' : 'var(--tertiary)', fontSize: 22 }} />
+                        </div>
+                        <div>
+                          <p style={{ fontFamily: 'Manrope', fontWeight: 700, fontSize: 13, color: 'var(--on-surface)' }}>{e.equipmentNo} — {e.equipmentName || '-'}</p>
+                          <p style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 2 }}>
+                            {s === 'expired' ? 'Riksa uji sudah expired' : `Jatuh tempo: ${formatDateShort(e.nextInspectionDate)}`}
+                          </p>
+                        </div>
+                      </div>
+                      <button className="urgent-btn btn btn-primary btn-sm" style={{ opacity: 0, transition: 'opacity 0.15s', pointerEvents: 'none' }}
+                        onClick={ev => { ev.stopPropagation(); navigate(`/inventory/${e.id}`); }}>
+                        LIHAT
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Aktivitas Terbaru — 5 cols (timeline style) */}
+          <div style={{ gridColumn: 'span 5', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 className="h-section">Aktivitas Terbaru</h4>
+              {/* Export button */}
+              <div style={{ position: 'relative' }} ref={exportRef}>
+                <button onClick={() => setExportOpen(o => !o)} className="btn btn-ghost btn-sm" style={{ gap: 5 }}>
+                  <Download size={13} /> Export
+                  <MI icon="expand_more" className="mi-sm" />
+                </button>
+                {exportOpen && (
+                  <div className="export-menu">
+                    <button className="export-menu-item" onClick={() => { doExportExcel(equipments); setExportOpen(false); }}>
+                      <FileSpreadsheet size={14} color="#455f88" /> Export Excel (.xlsx)
+                    </button>
+                    <button className="export-menu-item" onClick={() => { doExportPDF(equipments); setExportOpen(false); }}>
+                      <FileText size={14} color="#9f403d" /> Cetak / Simpan PDF
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="card-low" style={{ padding: 24, position: 'relative', overflow: 'hidden', flex: 1 }}>
+              {/* Timeline line */}
+              <div style={{ position: 'absolute', left: 32, top: 36, bottom: 36, width: 1, background: 'var(--outline-variant)', opacity: 0.3 }} />
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+                {loading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: 32 }}><div className="spinner" /></div>
+                ) : recent.length === 0 ? (
+                  <p style={{ color: 'var(--on-surface-variant)', fontSize: 13 }}>Belum ada aktivitas.</p>
+                ) : recent.map((e, i) => (
+                  <div key={e.id} onClick={() => navigate(`/inventory/${e.id}`)} style={{ display: 'flex', gap: 20, cursor: 'pointer', opacity: i >= 3 ? 0.55 : 1 }}>
+                    {/* Timeline dot */}
+                    <div style={{ width: 14, height: 14, borderRadius: '50%', background: i === 0 ? 'var(--primary)' : i === 1 ? 'var(--secondary)' : 'var(--outline-variant)', flexShrink: 0, marginTop: 4, zIndex: 1, boxShadow: `0 0 0 3px var(--surface-container-low)` }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p className="label-caps" style={{ marginBottom: 4 }}>{formatDateShort(e.updatedAt)}</p>
+                      <p style={{ fontSize: 13, color: 'var(--on-surface)' }}>Pembaruan peralatan <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{e.equipmentNo}</span></p>
+                      <p className="label-caps" style={{ marginTop: 3 }}>Oleh: {e.updatedBy || 'Sistem'}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* FAB */}
+      <button className="fab" onClick={() => navigate('/register-equipment')}>
+        <MI icon="add_box" />
+        REGISTRASI UNIT BARU
+      </button>
     </Layout>
   );
 };
