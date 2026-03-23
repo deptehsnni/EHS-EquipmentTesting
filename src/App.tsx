@@ -11,6 +11,7 @@ import { PublicScannerPage } from './pages/PublicScannerPage';
 import { EquipmentPublicPage } from './pages/EquipmentPublicPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { EquipmentDetailPage } from './pages/EquipmentDetailPage';
+import { ReportPage } from './pages/ReportPage';
 
 // ─── Auth Context ─────────────────────────────────────────────────────────────
 
@@ -43,8 +44,16 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const loadUser = async (uid: string) => {
     const { data } = await supabase.from('profiles').select('*').eq('id', uid).single();
     if (data) {
-      setUser({ id: data.id, employeeId: data.employee_id, fullName: data.full_name, role: data.role, status: data.status });
-    } else { setUser(null); }
+      setUser({
+        id: data.id,
+        employeeId: data.employee_id,
+        fullName: data.full_name,
+        role: data.role,
+        status: data.status,
+      });
+    } else {
+      setUser(null);
+    }
   };
 
   useEffect(() => {
@@ -52,22 +61,35 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       if (session?.user) loadUser(session.user.id).finally(() => setLoading(false));
       else setLoading(false);
     });
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
       if (session?.user) loadUser(session.user.id).finally(() => setLoading(false));
       else { setUser(null); setLoading(false); }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
-  const signOut = async () => { await supabase.auth.signOut(); setUser(null); };
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
 
-  return <AuthContext.Provider value={{ user, loading, signOut }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={{ user, loading, signOut }}>
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode; requireAdmin?: boolean }> = ({ children, requireAdmin = false }) => {
+const ProtectedRoute: React.FC<{
+  children: React.ReactNode;
+  requireAdmin?: boolean;
+}> = ({ children, requireAdmin = false }) => {
   const { user, loading } = useAuth();
+
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#F4F6F9]">
       <div className="spinner" />
@@ -77,6 +99,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; requireAdmin?: boole
   if (user.status === 'pending') return <Navigate to="/login?status=pending" replace />;
   if (user.status === 'rejected') return <Navigate to="/login?status=rejected" replace />;
   if (requireAdmin && user.role !== 'superadmin') return <Navigate to="/dashboard" replace />;
+
   return <>{children}</>;
 };
 
@@ -84,7 +107,11 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; requireAdmin?: boole
 
 const RootRedirect: React.FC = () => {
   const { user, loading } = useAuth();
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F4F6F9]"><div className="spinner" /></div>;
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-[#F4F6F9]">
+      <div className="spinner" />
+    </div>
+  );
   if (!user || user.status !== 'approved') return <Navigate to="/login" replace />;
   return <Navigate to={user.role === 'superadmin' ? '/admin' : '/dashboard'} replace />;
 };
@@ -107,6 +134,7 @@ export default function App() {
           <Route path="/inventory" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
           <Route path="/inventory/:id" element={<ProtectedRoute><EquipmentDetailPage /></ProtectedRoute>} />
           <Route path="/register-equipment" element={<ProtectedRoute><RegisterEquipmentPage /></ProtectedRoute>} />
+          <Route path="/report" element={<ProtectedRoute><ReportPage /></ProtectedRoute>} />
 
           {/* Protected - superadmin only */}
           <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminDashboard /></ProtectedRoute>} />
