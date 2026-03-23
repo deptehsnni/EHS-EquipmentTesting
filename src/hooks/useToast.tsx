@@ -59,14 +59,19 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
+      {/* NOTE: Using "toast-container" class (defined in index.css) */}
       <div className="toast-container">
         {toasts.map(t => {
           const Icon = icons[t.type];
           return (
             <div key={t.id} className={`toast toast-${t.type}`}>
-              <Icon size={16} className="flex-shrink-0" />
-              <span className="flex-1">{t.message}</span>
-              <button onClick={() => removeToast(t.id)} className="flex-shrink-0 opacity-60 hover:opacity-100">
+              <Icon size={16} style={{ flexShrink: 0 }} />
+              <span style={{ flex: 1 }}>{t.message}</span>
+              <button
+                onClick={() => removeToast(t.id)}
+                style={{ flexShrink: 0, opacity: 0.6, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0 }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '0.6')}>
                 <X size={14} />
               </button>
             </div>
