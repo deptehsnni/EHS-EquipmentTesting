@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../App';
 import {
   LayoutDashboard, ClipboardList, PlusCircle, ShieldCheck,
-  LogOut, QrCode, Menu, X, ChevronRight, Settings
+  LogOut, QrCode, Menu, X, ChevronRight, BarChart2,
 } from 'lucide-react';
 
 interface LayoutProps { children: React.ReactNode; }
@@ -12,6 +12,7 @@ const navItems = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { name: 'Inventory', path: '/inventory', icon: ClipboardList },
   { name: 'Registrasi', path: '/register-equipment', icon: PlusCircle },
+  { name: 'Laporan', path: '/report', icon: BarChart2 },
 ];
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
@@ -24,10 +25,16 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     ? [...navItems, { name: 'Admin', path: '/admin', icon: ShieldCheck }]
     : navItems;
 
+  // On mobile, only show 4 items in bottom nav; rest in drawer
+  const bottomNavItems = allNav.slice(0, 4);
+
   const isActive = (path: string) => location.pathname === path;
   const initials = user?.fullName?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'U';
 
-  const handleLogout = async () => { await signOut(); navigate('/login'); };
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <div className="flex min-h-screen" style={{ background: 'var(--surface-2)' }}>
@@ -37,10 +44,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Brand */}
         <div style={{ padding: '20px 16px 8px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', marginBottom: 4 }}>
-            <div style={{
-              width: 28, height: 28, background: 'var(--accent)', borderRadius: 6,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
-            }}>
+            <div style={{ width: 28, height: 28, background: 'var(--accent)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <QrCode size={15} color="#fff" />
             </div>
             <div>
@@ -50,7 +54,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </div>
 
-        {/* Nav Section */}
+        {/* Nav */}
         <div style={{ padding: '4px 12px', flex: 1 }}>
           <p style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.08em', textTransform: 'uppercase', padding: '8px 12px 6px' }}>
             Menu
@@ -68,28 +72,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* User Section */}
         <div style={{ padding: '8px 12px 16px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '10px 12px', borderRadius: 8,
-            background: 'rgba(255,255,255,0.04)',
-          }}>
-            <div style={{
-              width: 30, height: 30, borderRadius: 6, background: 'var(--accent)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
-            }}>{initials}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 8, background: 'rgba(255,255,255,0.04)' }}>
+            <div style={{ width: 30, height: 30, borderRadius: 6, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+              {initials}
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ color: '#fff', fontSize: 12, fontWeight: 600, lineHeight: 1, marginBottom: 2 }} className="truncate">{user?.fullName}</p>
               <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, textTransform: 'capitalize' }}>{user?.role}</p>
             </div>
-            <button onClick={handleLogout} title="Keluar" style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: 4,
-              color: 'rgba(255,255,255,0.3)', borderRadius: 4, transition: 'color 0.12s',
-              display: 'flex', alignItems: 'center',
-            }}
+            <button onClick={handleLogout} title="Keluar"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'rgba(255,255,255,0.3)', borderRadius: 4, transition: 'color 0.12s', display: 'flex', alignItems: 'center' }}
               onMouseEnter={e => (e.currentTarget.style.color = '#FC8181')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.3)')}
-            >
+              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.3)')}>
               <LogOut size={15} />
             </button>
           </div>
@@ -111,9 +105,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
           <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>EHS Equipment</span>
         </div>
-        <button onClick={() => setDrawerOpen(true)} style={{
-          background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--ink-2)',
-        }}>
+        <button onClick={() => setDrawerOpen(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, color: 'var(--ink-2)' }}>
           <Menu size={20} />
         </button>
       </div>
@@ -138,7 +130,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <X size={20} />
               </button>
             </div>
-            <nav style={{ flex: 1, padding: '12px' }}>
+            <nav style={{ flex: 1, padding: '12px', overflowY: 'auto' }}>
               {allNav.map(item => (
                 <Link key={item.path} to={item.path} onClick={() => setDrawerOpen(false)}
                   className={`nav-item ${isActive(item.path) ? 'active' : ''}`}
@@ -166,21 +158,27 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* ── MAIN CONTENT ── */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        <main style={{ flex: 1, overflowY: 'auto' }}
-          className="pt-14 lg:pt-0 main-content">
+        <main style={{ flex: 1, overflowY: 'auto' }} className="pt-14 lg:pt-0 main-content">
           {children}
         </main>
       </div>
 
-      {/* ── MOBILE BOTTOM NAV ── */}
+      {/* ── MOBILE BOTTOM NAV (max 4 items) ── */}
       <nav className="bottom-nav lg:hidden">
-        {allNav.map(item => (
+        {bottomNavItems.map(item => (
           <Link key={item.path} to={item.path} className={`bottom-nav-item ${isActive(item.path) ? 'active' : ''}`}>
             {isActive(item.path) && <span className="nav-pill" />}
             <item.icon size={22} strokeWidth={isActive(item.path) ? 2.5 : 1.8} />
             {item.name}
           </Link>
         ))}
+        {/* More button if superadmin has more items */}
+        {allNav.length > 4 && (
+          <button onClick={() => setDrawerOpen(true)} className="bottom-nav-item" style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+            <Menu size={22} strokeWidth={1.8} />
+            Lainnya
+          </button>
+        )}
       </nav>
 
       <style>{`
