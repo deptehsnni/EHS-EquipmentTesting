@@ -1,16 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Layout } from '../components/Layout';
 import { Equipment, mapDbToEquipment, getRiksaUjiStatus, getRiksaUjiColor, riksaUjiStatusLabel, formatDateShort } from '../types';
-import { Search, Filter, Plus, Download, ChevronRight, Package, X } from 'lucide-react';
+import { Search, Filter, Plus, Download, ChevronRight, Package, FileSpreadsheet, FileText, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 type FilterStatus = 'all' | 'active' | 'warning' | 'expired' | 'unknown';
 
 const useIsMobile = () => {
   const [isMob, setIsMob] = useState(window.innerWidth < 1024);
-  useEffect(() => { const fn = () => setIsMob(window.innerWidth < 1024); window.addEventListener('resize', fn); return () => window.removeEventListener('resize', fn); }, []);
+  useEffect(() => {
+    const fn = () => setIsMob(window.innerWidth < 1024);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
   return isMob;
 };
 
@@ -25,10 +29,21 @@ export const InventoryPage: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterDept, setFilterDept] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     supabase.from('equipments').select('*').order('created_at', { ascending: false })
       .then(({ data }) => { if (data) setEquipments(data.map(mapDbToEquipment)); setLoading(false); });
+  }, []);
+
+  // Close export menu on outside click
+  useEffect(() => {
+    const fn = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) setExportOpen(false);
+    };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
   }, []);
 
   const categories = useMemo(() => ['all', ...Array.from(new Set(equipments.map(e => e.category)))], [equipments]);
@@ -36,30 +51,92 @@ export const InventoryPage: React.FC = () => {
 
   const filtered = useMemo(() => equipments.filter(e => {
     const s = getRiksaUjiStatus(e.nextInspectionDate);
-    return (!search || [e.equipmentNo, e.equipmentName, e.department, e.category].some(field => field?.toLowerCase().includes(search.toLowerCase())))
+    return (
+      (!search || [e.equipmentNo, e.equipmentName, e.department, e.category].some(f => f?.toLowerCase().includes(search.toLowerCase())))
       && (filterStatus === 'all' || s === filterStatus)
       && (filterCategory === 'all' || e.category === filterCategory)
-      && (filterDept === 'all' || e.department === filterDept);
+      && (filterDept === 'all' || e.department === filterDept)
+    );
   }), [equipments, search, filterStatus, filterCategory, filterDept]);
 
-  const exportExcel = () => {
-    const rows = filtered.map(e => ({
-      'No. Peralatan': e.equipmentNo, 'Nama': e.equipmentName, 'Kategori': e.category,
-      'Tipe': e.equipmentType, 'Merk': e.brand, 'Tahun': e.manufactureYear,
-      'Departemen': e.department, 'Status Kondisi': e.status,
-      'Riksa Uji Terakhir': e.lastInspectionDate || '-', 'Masa Berlaku': e.validityPeriod || '-',
+  const exportExcel = (data: Equipment[]) => {
+    const rows = data.map(e => ({
+      'No. Peralatan': e.equipmentNo,
+      'Nama': e.equipmentName,
+      'Kategori': e.category,
+      'Tipe': e.equipmentType,
+      'Merk': e.brand,
+      'Tahun': e.manufactureYear,
+      'Departemen': e.department,
+      'Status Kondisi': e.status,
+      'Riksa Uji Terakhir': e.lastInspectionDate || '-',
+      'Masa Berlaku': e.validityPeriod || '-',
       'Riksa Uji Berikutnya': e.nextInspectionDate || '-',
       'Status Riksa Uji': riksaUjiStatusLabel[getRiksaUjiStatus(e.nextInspectionDate)],
     }));
     const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = Object.keys(rows[0] || {}).map(() => ({ wch: 20 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
     XLSX.writeFile(wb, `EHS_Inventory_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
+  const exportPDF = (data: Equipment[]) => {
+    const now = new Date();
+    const html = `<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; padding: 32px; font-size: 12px; }
+  h1 { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+  .sub { color: #6b7280; font-size: 12px; margin-bottom: 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { padding: 7px 10px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; background: #f9fafb; border-bottom: 1px solid #e5e7eb; }
+  td { padding: 9px 10px; border-bottom: 1px solid #f3f4f6; font-size: 11px; }
+  .b-a { background: #f0fdf4; color: #16a34a; border-radius: 99px; padding: 2px 8px; font-size: 10px; font-weight: 700; }
+  .b-w { background: #fffbeb; color: #d97706; border-radius: 99px; padding: 2px 8px; font-size: 10px; font-weight: 700; }
+  .b-e { background: #fef2f2; color: #dc2626; border-radius: 99px; padding: 2px 8px; font-size: 10px; font-weight: 700; }
+  .b-u { background: #f3f4f6; color: #6b7280; border-radius: 99px; padding: 2px 8px; font-size: 10px; font-weight: 700; }
+  footer { margin-top: 24px; font-size: 10px; color: #9ca3af; }
+  @media print { body { padding: 16px; } }
+</style>
+</head>
+<body>
+  <h1>Daftar Inventory EHS</h1>
+  <p class="sub">Dicetak ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} · ${data.length} peralatan</p>
+  <table>
+    <thead><tr><th>No. Peralatan</th><th>Nama</th><th>Kategori</th><th>Departemen</th><th>Riksa Uji Berikutnya</th><th>Status</th></tr></thead>
+    <tbody>
+      ${data.map(e => {
+        const s = getRiksaUjiStatus(e.nextInspectionDate);
+        const badgeClass = s === 'active' ? 'b-a' : s === 'warning' ? 'b-w' : s === 'expired' ? 'b-e' : 'b-u';
+        return `<tr>
+          <td style="font-family:monospace;font-weight:700">${e.equipmentNo}</td>
+          <td>${e.equipmentName || '-'}</td>
+          <td>${e.category}</td>
+          <td>${e.department || '-'}</td>
+          <td style="color:${s === 'expired' ? '#dc2626' : s === 'warning' ? '#d97706' : 'inherit'};font-weight:${s !== 'active' && s !== 'unknown' ? '600' : '400'}">${e.nextInspectionDate ? new Date(e.nextInspectionDate).toLocaleDateString('id-ID') : '-'}</td>
+          <td><span class="${badgeClass}">${riksaUjiStatusLabel[s]}</span></td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <footer>EHS Equipment Testing System · ${now.getFullYear()}</footer>
+</body>
+</html>`;
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => w.print(), 500);
+  };
+
   const tabs: { key: FilterStatus; label: string }[] = [
-    { key: 'all', label: 'Semua' }, { key: 'active', label: 'Aktif' },
-    { key: 'warning', label: 'Segera Habis' }, { key: 'expired', label: 'Expired' },
+    { key: 'all', label: 'Semua' },
+    { key: 'active', label: 'Aktif' },
+    { key: 'warning', label: 'Segera Habis' },
+    { key: 'expired', label: 'Expired' },
     { key: 'unknown', label: 'Belum Diisi' },
   ];
 
@@ -69,25 +146,34 @@ export const InventoryPage: React.FC = () => {
   if (isMobile) return (
     <Layout>
       <div style={{ background: '#F2F2F7', minHeight: '100vh' }}>
-        {/* Header */}
         <div style={{ background: '#fff', padding: '16px', borderBottom: '1px solid #F3F4F6' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div>
               <h1 style={{ fontWeight: 800, fontSize: 22, color: '#111', letterSpacing: '-0.02em' }}>Inventory</h1>
               <p style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>{filtered.length} dari {equipments.length} peralatan</p>
             </div>
-            <button onClick={() => navigate('/register-equipment')} style={{
-              background: 'var(--accent)', color: '#fff', border: 'none',
-              borderRadius: 12, padding: '10px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer',
-            }}>+ Tambah</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => exportExcel(filtered)} style={{ background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0', borderRadius: 10, padding: '9px 12px', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                <FileSpreadsheet size={14} />
+              </button>
+              <button onClick={() => navigate('/register-equipment')} style={{ background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 12, padding: '9px 16px', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}>
+                + Tambah
+              </button>
+            </div>
           </div>
+
           {/* Search */}
           <div style={{ position: 'relative', marginBottom: 12 }}>
             <Search size={16} color="#9CA3AF" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-            <input className="input-field" placeholder="Cari peralatan..." value={search} onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: 40, height: 44, borderRadius: 12, fontSize: 15 }} />
+            <input className="input-field" placeholder="Cari peralatan..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 40, height: 44, borderRadius: 12, fontSize: 15 }} />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', display: 'flex' }}>
+                <X size={16} />
+              </button>
+            )}
           </div>
-          {/* Status tabs */}
+
+          {/* Status Tabs */}
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
             {tabs.map(t => (
               <button key={t.key} onClick={() => setFilterStatus(t.key)} style={{
@@ -110,7 +196,6 @@ export const InventoryPage: React.FC = () => {
             </div>
           ) : filtered.map(e => {
             const s = getRiksaUjiStatus(e.nextInspectionDate);
-            const pillClass = s === 'active' ? 'status-active' : s === 'warning' ? 'status-warning' : s === 'expired' ? 'status-expired' : 'status-unknown';
             const dotColor = s === 'active' ? '#16A34A' : s === 'warning' ? '#D97706' : s === 'expired' ? '#DC2626' : '#9CA3AF';
             return (
               <div key={e.id} className="m-card-pressable" onClick={() => navigate(`/inventory/${e.id}`)}>
@@ -119,7 +204,7 @@ export const InventoryPage: React.FC = () => {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                       <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 15, color: '#111' }}>{e.equipmentNo}</span>
-                      <span className={`status-pill ${pillClass}`}>{riksaUjiStatusLabel[s]}</span>
+                      <span className={`status-pill status-${s}`}>{riksaUjiStatusLabel[s]}</span>
                     </div>
                     <p style={{ fontSize: 13, color: '#374151', marginBottom: 3, fontWeight: 500 }}>{e.equipmentName || '-'}</p>
                     <p style={{ fontSize: 12, color: '#9CA3AF' }}>{e.category} · {e.department || '-'}</p>
@@ -129,9 +214,6 @@ export const InventoryPage: React.FC = () => {
               </div>
             );
           })}
-          <button onClick={exportExcel} className="btn btn-secondary" style={{ width: '100%', marginTop: 8, height: 48, borderRadius: 14, gap: 8, fontSize: 14 }}>
-            <Download size={16} /> Export Excel
-          </button>
         </div>
       </div>
     </Layout>
@@ -148,9 +230,22 @@ export const InventoryPage: React.FC = () => {
             <p style={{ color: 'var(--ink-3)', fontSize: 14, marginTop: 6 }}>{filtered.length} dari {equipments.length} peralatan terdaftar</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={exportExcel} className="btn btn-secondary" style={{ gap: 6 }}>
-              <Download size={14} /> Export Excel
-            </button>
+            {/* Export Dropdown */}
+            <div style={{ position: 'relative' }} ref={exportRef}>
+              <button onClick={() => setExportOpen(o => !o)} className="btn btn-secondary" style={{ gap: 6 }}>
+                <Download size={14} /> Export <span style={{ fontSize: 10, opacity: 0.5 }}>▾</span>
+              </button>
+              {exportOpen && (
+                <div className="export-menu">
+                  <button className="export-menu-item" onClick={() => { exportExcel(filtered); setExportOpen(false); }}>
+                    <FileSpreadsheet size={15} color="#16A34A" /> Export Excel (.xlsx)
+                  </button>
+                  <button className="export-menu-item" onClick={() => { exportPDF(filtered); setExportOpen(false); }}>
+                    <FileText size={15} color="#DC2626" /> Cetak / Simpan PDF
+                  </button>
+                </div>
+              )}
+            </div>
             <button onClick={() => navigate('/register-equipment')} className="btn btn-primary">+ Registrasi</button>
           </div>
         </div>
@@ -160,13 +255,24 @@ export const InventoryPage: React.FC = () => {
           <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
             <div style={{ position: 'relative', flex: 1 }}>
               <Search size={14} color="var(--ink-3)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
-              <input className="input-field" placeholder="Cari nomor, nama, departemen..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 32 }} />
+              <input className="input-field" placeholder="Cari nomor, nama, departemen..." value={search}
+                onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 32 }} />
+              {search && (
+                <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--ink-3)', display: 'flex' }}>
+                  <X size={14} />
+                </button>
+              )}
             </div>
             <button onClick={() => setShowFilters(!showFilters)} className="btn btn-secondary" style={{ gap: 6, position: 'relative' }}>
               <Filter size={14} /> Filter
-              {activeFilters > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 16, height: 16, background: 'var(--accent)', borderRadius: '50%', fontSize: 10, color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{activeFilters}</span>}
+              {activeFilters > 0 && (
+                <span style={{ position: 'absolute', top: -4, right: -4, width: 16, height: 16, background: 'var(--accent)', borderRadius: '50%', fontSize: 10, color: '#fff', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {activeFilters}
+                </span>
+              )}
             </button>
           </div>
+
           {showFilters && (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 12, borderTop: '1px solid var(--border)', marginBottom: 12 }}>
               <div>
@@ -183,7 +289,8 @@ export const InventoryPage: React.FC = () => {
               </div>
             </div>
           )}
-          {/* Tabs */}
+
+          {/* Status Tabs */}
           <div style={{ display: 'flex', gap: 4 }}>
             {tabs.map(t => (
               <button key={t.key} onClick={() => setFilterStatus(t.key)} style={{
@@ -191,7 +298,14 @@ export const InventoryPage: React.FC = () => {
                 background: filterStatus === t.key ? 'var(--ink)' : 'transparent',
                 color: filterStatus === t.key ? '#fff' : 'var(--ink-3)',
                 transition: 'all 0.12s',
-              }}>{t.label} {t.key !== 'all' && <span style={{ opacity: 0.6, marginLeft: 3 }}>{equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === t.key).length}</span>}</button>
+              }}>
+                {t.label}
+                {t.key !== 'all' && (
+                  <span style={{ opacity: 0.6, marginLeft: 4 }}>
+                    {equipments.filter(e => getRiksaUjiStatus(e.nextInspectionDate) === t.key).length}
+                  </span>
+                )}
+              </button>
             ))}
           </div>
         </div>
@@ -204,21 +318,31 @@ export const InventoryPage: React.FC = () => {
             <div style={{ textAlign: 'center', padding: '60px 20px' }}>
               <Package size={36} color="var(--border-2)" style={{ margin: '0 auto 12px' }} />
               <p style={{ color: 'var(--ink-3)', fontSize: 14 }}>Tidak ada peralatan ditemukan</p>
+              {search && <button onClick={() => setSearch('')} className="btn btn-ghost btn-sm" style={{ marginTop: 10 }}>Hapus pencarian</button>}
             </div>
           ) : (
             <table className="data-table">
               <thead>
-                <tr><th>No. Peralatan</th><th>Nama & Kategori</th><th>Departemen</th><th>Riksa Uji Berikutnya</th><th>Status</th><th style={{ width: 40 }}></th></tr>
+                <tr>
+                  <th>No. Peralatan</th>
+                  <th>Nama & Kategori</th>
+                  <th>Departemen</th>
+                  <th>Riksa Uji Berikutnya</th>
+                  <th>Status</th>
+                  <th style={{ width: 40 }}></th>
+                </tr>
               </thead>
               <tbody>
                 {filtered.map(e => {
                   const s = getRiksaUjiStatus(e.nextInspectionDate);
-                  const c = getRiksaUjiColor(s);
                   return (
                     <tr key={e.id} onClick={() => navigate(`/inventory/${e.id}`)}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ width: 3, height: 18, background: s === 'active' ? 'var(--green)' : s === 'warning' ? 'var(--amber)' : s === 'expired' ? 'var(--red)' : 'var(--border-2)', borderRadius: 99 }} />
+                          <div style={{
+                            width: 3, height: 18, borderRadius: 99,
+                            background: s === 'active' ? 'var(--green)' : s === 'warning' ? 'var(--amber)' : s === 'expired' ? 'var(--red)' : 'var(--border-2)',
+                          }} />
                           <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13, color: 'var(--ink)' }}>{e.equipmentNo}</span>
                         </div>
                       </td>
