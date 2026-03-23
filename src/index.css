@@ -549,3 +549,16 @@ select.input-field {
   border-radius: var(--r-md);
 }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+/* ── Date input ─────────────────────────────────────────────────────────── */
+input[type="date"].input-field {
+  cursor: pointer;
+}
+input[type="date"].input-field::-webkit-calendar-picker-indicator {
+  opacity: 0.5;
+  cursor: pointer;
+  padding-right: 2px;
+}
+input[type="date"].input-field::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
