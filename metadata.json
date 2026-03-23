@@ -1,0 +1,5 @@
+{
+  "name": "EquipTrack Pro",
+  "description": "Sistem Manajemen Peralatan dengan Form Dinamis, QR Code, dan Import Excel.",
+  "requestFramePermissions": ["camera"]
+}
