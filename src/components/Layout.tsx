@@ -18,8 +18,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, signOut } = useAuth();
   const location = useLocation();
   const navigate  = useNavigate();
-  const [drawer,        setDrawer]        = useState(false);
+const [drawer,        setDrawer]        = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+// REMOVED inputActive - caused layout re-render interfering with form focus
 
   const nav = user?.role === 'superadmin'
     ? [...baseNav, { name: 'Admin', path: '/admin', icon: 'admin_panel_settings' }]
@@ -260,7 +261,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* Page content */}
         <div className="page-scroll" style={{ flex: 1 }}>
-          {children}
+{children}
         </div>
       </div>
 
