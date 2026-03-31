@@ -173,7 +173,11 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                       </div>
                     </td>
-                    <td><ActionBtns p={{ ...p, role: p.role === 'superadmin' ? 'superadmin' : 'user' } as any} /></td>
+<td>
+  <span className={`badge ${p.role === 'superadmin' ? 'badge-active' : 'badge-unknown'}`}>
+    {p.role === 'superadmin' ? 'Superadmin' : 'User'}
+  </span>
+</td>
                     <td>{statusBadge(p.status)}</td>
                     <td style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{new Date(p.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                     <td>{p.role !== 'superadmin' && (
