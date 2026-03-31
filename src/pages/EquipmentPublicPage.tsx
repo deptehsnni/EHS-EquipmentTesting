@@ -394,3 +394,5 @@ const EquipmentPublicPage: React.FC = () => {
     </div>
   );
 };
+
+export { EquipmentPublicPage };
