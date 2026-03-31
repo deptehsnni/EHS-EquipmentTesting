@@ -7,7 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { Equipment, EquipmentCategory, ValidityPeriod, calculateNextInspectionDate, mapEquipmentToDb } from '../types';
 import { QRCodeCanvas } from 'qrcode.react';
 import { CheckCircle2, Download, FileSpreadsheet, X, ChevronDown } from 'lucide-react';
-import { FormHero } from '../components/FormHero';
+
 import * as XLSX from 'xlsx';
 
 const CATEGORIES: EquipmentCategory[] = ['Fire Equipment', 'Heavy Equipment', 'Bejana Tekan', 'Tangki Timbun', 'Lain-lain'];
@@ -221,17 +221,37 @@ const Section: React.FC<{ title: string; icon?: string; children: React.ReactNod
         </div>
       )}
 
-<FormHero 
-  step={1}
-  totalSteps={3}
-  title="Registrasi Peralatan Baru"
-  subtitle="Lengkapi informasi peralatan untuk didaftarkan ke sistem EHS"
-  stats={[
-    { label: 'Total', value: '127', color: '#455f88' },
-    { label: 'Hari ini', value: '3', color: '#16A34A' },
-    { label: 'Fire Eq', value: '42%', color: '#EF4444' }
-  ]}
-/>
+<div className="hero-section" style={{
+  background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-dim) 100%)',
+  borderRadius: 'var(--r-2xl)', 
+  padding: '32px 24px', 
+  color: 'var(--on-primary)',
+  marginBottom: '24px',
+  position: 'relative',
+  overflow: 'hidden'
+}}>
+  <div style={{
+    position: 'absolute',
+    top: '-50px', right: '-50px',
+    width: '200px', height: '200px',
+    background: 'rgba(255,255,255,0.1)',
+    borderRadius: '50%',
+    filter: 'blur(40px)'
+  }} />
+  <div style={{ position: 'relative', zIndex: 1 }}>
+    <h1 style={{ 
+      fontFamily: 'Manrope', 
+      fontSize: '28px', 
+      fontWeight: '900', 
+      lineHeight: '1.1',
+      marginBottom: '6px',
+      letterSpacing: '-0.02em'
+    }}>
+      Registrasi Peralatan Baru
+    </h1>
+    <p style={{ fontSize: '14px', opacity: 0.9, lineHeight: '1.5' }}>Lengkapi informasi peralatan untuk didaftarkan ke sistem EHS</p>
+  </div>
+</div>
 
 <div style={{ padding: '0 40px 32px', maxWidth: 900, margin: '0 auto' }}>
   <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
