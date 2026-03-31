@@ -133,7 +133,27 @@ export const EquipmentDetailPage: React.FC = () => {
 
   const riksaStatus = getRiksaUjiStatus(equipment.nextInspectionDate);
   const qrValue     = `${window.location.origin}/scan/${equipment.equipmentNo}`;
-  const specItems   = Object.entries(equipment.specs || {}).filter(([, v]) => v && typeof v === 'string');
+// Filter redundant keys from specs + proper labels
+const EXCLUDED_SPEC_KEYS = ['department', 'equipment_name', 'equipment_type', 'validity_period', 'last_inspection_date', 'next_inspection_date', 'brand', 'manufacture_year'];
+
+const SPEC_LABEL_MAP: Record<string, string> = {
+  capacity: 'Kapasitas',
+  volume: 'Volume',
+  designPressure: 'Design Pressure', 
+  workingPressure: 'Working Pressure',
+  customCategoryName: 'Nama Kategori Custom',
+};
+
+const getSpecLabel = (key: string): string => {
+  return SPEC_LABEL_MAP[key as keyof typeof SPEC_LABEL_MAP] || key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .trim()
+    .replace(/\b\w/g, l => l.toUpperCase());
+};
+
+const specItems = Object.entries(equipment.specs || {})
+  .filter(([k, v]) => v && typeof v === 'string' && !EXCLUDED_SPEC_KEYS.includes(k));
 
   const cancelUpdate = () => {
     setUpdating(false);
@@ -388,9 +408,14 @@ export const EquipmentDetailPage: React.FC = () => {
               <div className="card" style={{ padding: 24 }}>
                 <h3 className="label-caps" style={{ marginBottom: 20, fontSize: 11 }}>Spesifikasi Teknis</h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 20 }}>
-                  {specItems.map(([k, v]) => (
-                    <div key={k}><p className="label-caps" style={{ marginBottom: 5 }}>{k.replace(/([A-Z])/g, ' $1').trim()}</p><p style={{ fontFamily: 'Manrope', fontWeight: 600, fontSize: 14, color: 'var(--on-surface)' }}>{v as string}</p></div>
-                  ))}
+{specItems.map(([k, v]) => (
+  <div key={k}>
+    <p className="label-caps" style={{ marginBottom: 5 }}>{getSpecLabel(k)}</p>
+    <p style={{ fontFamily: 'Manrope', fontWeight: 600, fontSize: 14, color: 'var(--on-surface)' }}>
+      {/\d{4}-\d{2}-\d{2}/.test(v as string) ? formatDateShort(v as string) : (v as string)}
+    </p>
+  </div>
+))}
                 </div>
               </div>
             )}
@@ -441,7 +466,14 @@ export const EquipmentDetailPage: React.FC = () => {
               {[{ l: 'Diperbarui oleh', v: equipment.updatedBy || '-' }, { l: 'Terakhir diperbarui', v: formatDateShort(equipment.updatedAt) }, { l: 'Terdaftar pada', v: formatDateShort(equipment.createdAt) }].map(r => (
                 <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 10 }}>
                   <span style={{ color: 'var(--on-surface-variant)' }}>{r.l}</span>
-                  <span style={{ fontFamily: 'Manrope', fontWeight: 600, color: 'var(--on-surface)' }}>{r.v}</span>
+<span style={{ 
+  fontFamily: 'Manrope', 
+  fontWeight: 600, 
+  color: 'var(--on-surface)',
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap'
+}}>{r.v}</span>
                 </div>
               ))}
             </div>
