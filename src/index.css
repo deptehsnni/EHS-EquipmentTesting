@@ -408,6 +408,27 @@ body {
 .input-field:focus { box-shadow: 0 0 0 2.5px rgba(69,95,136,0.3); }
 .input-field:disabled { opacity: 0.5; cursor: not-allowed; }
 textarea.input-field { resize: none; line-height: 1.55; }
+/* ── Input Fix - Prevent focus loss & typing lag ───────────────────────── */
+.input-field, input, select, textarea {
+  outline: none !important;
+  /* Prevent mobile virtual keyboard dismiss */
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  /* Fix iOS Safari input focus */
+  -webkit-appearance: none;
+  appearance: none;
+  /* Keep input stable during typing */
+  position: relative;
+  z-index: 10;
+}
+
+.input-field:focus, input:focus, select:focus, textarea:focus {
+  position: relative !important;
+  z-index: 999 !important;
+  outline: 2px solid var(--primary) !important;
+  outline-offset: 2px;
+}
+
 select.input-field {
   cursor: pointer;
   padding-right: 32px;
