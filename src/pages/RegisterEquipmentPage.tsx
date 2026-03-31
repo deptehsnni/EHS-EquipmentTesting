@@ -7,6 +7,7 @@ import { useToast } from '../hooks/useToast';
 import { Equipment, EquipmentCategory, ValidityPeriod, calculateNextInspectionDate, mapEquipmentToDb } from '../types';
 import { QRCodeCanvas } from 'qrcode.react';
 import { CheckCircle2, Download, FileSpreadsheet, X, ChevronDown } from 'lucide-react';
+import { FormHero } from '../components/FormHero';
 import * as XLSX from 'xlsx';
 
 const CATEGORIES: EquipmentCategory[] = ['Fire Equipment', 'Heavy Equipment', 'Bejana Tekan', 'Tangki Timbun', 'Lain-lain'];
@@ -164,10 +165,27 @@ export const RegisterEquipmentPage: React.FC = () => {
     </label>
   );
 
-  const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-    <div className="surface" style={{ padding: 24, overflow: 'hidden' }}>
-      <div className="section-header" style={{ marginBottom: 20 }}><h2 className="text-heading">{title}</h2></div>
-      {children}
+const Section: React.FC<{ title: string; icon?: string; children: React.ReactNode }> = ({ title, icon, children }) => (
+    <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
+      <div style={{ 
+        background: 'linear-gradient(90deg, var(--primary-container) 0%, var(--surface-container-high) 100%)', 
+        padding: '20px 24px', 
+        borderBottom: '1px solid var(--surface-container)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {icon && <div style={{ width: '36px', height: '36px', background: 'rgba(69,95,136,0.1)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <span className="mi" style={{ color: 'var(--primary)', fontSize: '18px' }}>{icon}</span>
+          </div>}
+          <div>
+            <h3 style={{ fontFamily: 'Manrope', fontSize: '16px', fontWeight: '700', color: 'var(--on-surface)', margin: 0, lineHeight: 1.2 }}>
+              {title}
+            </h3>
+          </div>
+        </div>
+      </div>
+      <div style={{ padding: '24px' }}>
+        {children}
+      </div>
     </div>
   );
 
@@ -203,22 +221,31 @@ export const RegisterEquipmentPage: React.FC = () => {
         </div>
       )}
 
-      <div style={{ padding: '32px 40px', maxWidth: 900, margin: '0 auto' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
-          <div>
-            <h1 className="text-display">Registrasi Peralatan</h1>
-            <p style={{ color: 'var(--ink-3)', fontSize: 14, marginTop: 6 }}>Daftarkan peralatan EHS baru ke dalam sistem</p>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFileImport} />
-            <button onClick={() => fileRef.current?.click()} className="btn btn-secondary" style={{ gap: 6 }}>
-              <FileSpreadsheet size={14} style={{ color: '#16A34A' }} /> Import Excel
-            </button>
-          </div>
-        </div>
+<FormHero 
+  step={1}
+  totalSteps={3}
+  title="Registrasi Peralatan Baru"
+  subtitle="Lengkapi informasi peralatan untuk didaftarkan ke sistem EHS"
+  stats={[
+    { label: 'Total', value: '127', color: '#455f88' },
+    { label: 'Hari ini', value: '3', color: '#16A34A' },
+    { label: 'Fire Eq', value: '42%', color: '#EF4444' }
+  ]}
+/>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Section title="Informasi Umum">
+<div style={{ padding: '0 40px 32px', maxWidth: 900, margin: '0 auto' }}>
+  <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+    <input ref={fileRef} type="file" accept=".xlsx,.xls" style={{ display: 'none' }} onChange={handleFileImport} />
+    <button onClick={() => fileRef.current?.click()} className="btn btn-success btn-lg" style={{ gap: 8, flex: 1 }}>
+      <FileSpreadsheet size={16} /> Import dari Excel
+    </button>
+    <button onClick={() => toast.info('Template Excel akan segera tersedia')} className="btn btn-secondary btn-lg" style={{ gap: 6 }}>
+      <Download size={16} /> Download Template
+    </button>
+  </div>
+
+  <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <Section title="Informasi Utama"> 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
               <div>
                 <Label>Nomor Peralatan *</Label>
