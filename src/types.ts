@@ -50,6 +50,13 @@ export interface EquipmentSpecs {
   [key: string]: string | undefined;
 }
 
+// ─── Constants for filtering redundant specs ────────────────────────────────
+export const EXCLUDED_SPEC_KEYS = [
+  'department', 'equipment_name', 'equipment_type', 
+  'validity_period', 'last_inspection_date', 'next_inspection_date',
+  'brand', 'manufacture_year'
+] as const;
+
 // ─── Inspection ───────────────────────────────────────────────────────────────
 
 export interface Inspection {
@@ -106,7 +113,13 @@ export const mapDbToEquipment = (row: any): Equipment => ({
   manufactureYear: row.manufacture_year?.toString() || row.specs?.manufacture_year || '',
   category: row.category,
   department: row.department || row.specs?.department || '',
-  specs: row.specs || {},
+  specs: {
+    ...row.specs,
+    // Filter out redundant keys that are already available as top-level fields
+    ...Object.fromEntries(
+      Object.entries(row.specs || {}).filter(([key]) => !EXCLUDED_SPEC_KEYS.includes(key as any))
+    )
+  } || {},
   status: row.status || 'Good',
   qrUrl: row.qr_url || `${window.location.origin}/scan/${row.equipment_no}`,
   lastInspectionDate: row.last_inspection_date || row.specs?.last_inspection_date,
