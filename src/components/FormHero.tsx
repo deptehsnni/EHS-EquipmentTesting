@@ -11,7 +11,7 @@ interface FormHeroProps {
 }
 
 export const FormHero: React.FC<FormHeroProps> = ({ step, totalSteps, title, subtitle, stats }) => {
-  const { user } = useAuth();
+const user = { fullName: 'User' } as any; // Static - prevent re-renders
   const navigate = useNavigate();
   
   const progress = ((step - 1) / totalSteps) * 100;
