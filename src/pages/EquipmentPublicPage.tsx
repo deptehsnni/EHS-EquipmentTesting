@@ -272,37 +272,88 @@ export const EquipmentPublicPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Riwayat inspeksi singkat */}
-        {equipment.inspections && equipment.inspections.length > 0 && (
+        {/* Riwayat Inspeksi - ENHANCED */}
+        {equipment.inspections && equipment.inspections.length > 0 ? (
           <div style={{
             background: '#fff', borderRadius: 16,
             border: '1px solid #E5E7EB',
             overflow: 'hidden', marginBottom: 12,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
           }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #F3F4F6' }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-                Riksa Uji Terakhir Dicatat
-              </p>
-            </div>
-            {equipment.inspections.slice(0, 2).map((insp, i, arr) => (
-              <div key={insp.id} style={{
-                padding: '13px 18px',
-                borderBottom: i < arr.length - 1 ? '1px solid #F9FAFB' : 'none',
-                display: 'flex', alignItems: 'flex-start', gap: 12,
-              }}>
-                <div style={{
-                  width: 8, height: 8, borderRadius: '50%', marginTop: 4, flexShrink: 0,
-                  background: insp.status === 'Good' ? '#059669' : insp.status === 'Needs Repair' ? '#D97706' : '#DC2626',
-                }} />
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{insp.type}</p>
-                  <p style={{ fontSize: 12, color: '#6B7280', marginTop: 2 }}>{insp.notes || 'Tidak ada catatan'}</p>
-                  <p style={{ fontSize: 11, color: '#9CA3AF', marginTop: 2 }}>oleh {insp.performedBy} · {formatDate(insp.date)}</p>
-                </div>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid #F3F4F6' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Calendar size={16} color="#4B5563" />
+                <p style={{ fontSize: 12, fontWeight: 700, color: '#111827', margin: 0, letterSpacing: '-0.01em' }}>
+                  Riwayat Riksa Uji
+                </p>
+                <span style={{ marginLeft: 'auto', background: '#F3F4F6', color: '#6B7280', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6, letterSpacing: '0.04em' }}>
+                  {equipment.inspections.length} catatan
+                </span>
               </div>
-            ))}
+            </div>
+            <div style={{ maxHeight: 200, overflow: 'auto' }}>
+              {equipment.inspections.slice(0, 5).map((insp, i) => (
+                <div key={insp.id} style={{
+                  padding: '16px 20px',
+                  borderBottom: i < equipment.inspections!.length - 1 ? '1px solid #F9FAFB' : 'none',
+                  display: 'flex', alignItems: 'flex-start', gap: 14
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    background: insp.status === 'Good' ? '#ECFDF5' : 
+                                insp.status === 'Needs Repair' ? '#FEF3C7' : '#FEF2F2',
+                    border: `2px solid ${insp.status === 'Good' ? '#10B981' : 
+                                      insp.status === 'Needs Repair' ? '#F59E0B' : '#EF4444'}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <span style={{
+                      fontSize: 14, fontWeight: 700,
+                      color: insp.status === 'Good' ? '#10B981' : 
+                              insp.status === 'Needs Repair' ? '#F59E0B' : '#EF4444'
+                    }}>
+                      {insp.status.charAt(0)}
+                    </span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                      <p style={{ fontSize: 14, fontWeight: 700, color: '#111827', margin: 0 }}>{insp.type}</p>
+                      <p style={{ fontSize: 11, color: '#6B7280', fontFamily: 'monospace', margin: 0 }}>
+                        {formatDate(insp.date)}
+                      </p>
+                    </div>
+                    <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.4, marginBottom: 6 }}>
+                      {insp.notes || 'Catatan tidak tersedia'}
+                    </p>
+                    <p style={{ fontSize: 11, color: '#9CA3AF', fontFamily: 'Manrope', fontWeight: 600 }}>
+                      oleh <span style={{ color: '#6366F1' }}>{insp.performedBy}</span>
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {equipment.inspections.length > 5 && (
+                <div style={{ padding: '12px 20px', textAlign: 'center', borderTop: '1px solid #F3F4F6' }}>
+                  <p style={{ fontSize: 12, color: '#9CA3AF' }}>
+                    ... dan {equipment.inspections.length - 5} catatan lainnya
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{
+            background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 16,
+            padding: '40px 24px', textAlign: 'center'
+          }}>
+            <Calendar size={48} color="#D1D5DB" style={{ margin: '0 auto 16px' }} />
+            <p style={{ fontSize: 15, fontWeight: 600, color: '#6B7280', marginBottom: 4 }}>
+              Belum ada riwayat
+            </p>
+            <p style={{ fontSize: 13, color: '#9CA3AF' }}>
+              Jadilah yang pertama mencatat riksa uji untuk peralatan ini
+            </p>
           </div>
         )}
+
 
         {/* Login CTA */}
         <div style={{
