@@ -386,14 +386,23 @@ body {
   width: 100%;
   padding: 11px 13px;
   background: var(--surface-container-low);
-  border: none; outline: none;
+  border: 1px solid transparent;
+  outline: none;
   border-radius: var(--r-md);
   font-family: 'Inter', sans-serif;
   font-size: 14px; color: var(--on-surface);
-  transition: box-shadow 0.15s;
+  transition: all 0.15s var(--ease);
   appearance: none; -webkit-appearance: none;
   line-height: 1.4;
   display: block;
+  box-sizing: border-box;
+}
+.input-field:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(69,95,136,0.1);
+}
+.input-field:hover:not(:focus) {
+  border-color: var(--outline-variant);
 }
 .input-field::placeholder { color: var(--outline); }
 .input-field:focus { box-shadow: 0 0 0 2.5px rgba(69,95,136,0.3); }
