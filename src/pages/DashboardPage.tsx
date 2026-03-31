@@ -162,9 +162,9 @@ export const DashboardPage: React.FC = () => {
                   <div key={s.l} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 7 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.c, flexShrink: 0 }} />
-                      <span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{s.l}</span>
+<span style={{ fontSize: 12, color: 'var(--on-surface-variant)' }}>{s.l}&nbsp;</span>
                     </div>
-                    <span style={{ fontFamily: 'Manrope', fontSize: 13, fontWeight: 700, color: '#283439' }}>{s.v}</span>
+<span style={{ fontFamily: 'Manrope', fontSize: 13, fontWeight: 700, color: '#283439' }}>&nbsp;{s.v}</span>
                   </div>
                 ))}
               </div>
